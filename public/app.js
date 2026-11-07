@@ -108,7 +108,7 @@ function err(e) { console.error(e); setStatus(e && e.code === "permission-denied
 
 /* ---------- datos en tiempo real (públicos) ---------- */
 onSnapshot(collection(db, "canchas"), s => {
-  S.canchas = s.docs.map(limpiarCancha).filter(Boolean); S.cargado.canchas = true; renderAll();
+  S.canchas = s.docs.map(limpiarCancha).filter(Boolean); S.cargado.canchas = true; renderAll(); encuadrar();
 }, err);
 onSnapshot(query(collection(db, "partidos"), where("inicio", ">=", Date.now() - 3 * 3600 * 1000)), s => {
   S.partidos = s.docs.map(limpiarPartido).filter(Boolean); S.cargado.partidos = true; renderAll();
@@ -175,7 +175,7 @@ function cargarGoogle(key) {
     });
     MAP.popup = new google.maps.InfoWindow();
     MAP.obj.addListener("click", e => onMapClick(e.latLng.lat(), e.latLng.lng()));
-    dibujarMe(); dibujarMarkers(); renderStatus();
+    dibujarMe(); dibujarMarkers(); renderStatus(); encuadrar();
   };
   const s = document.createElement("script");
   s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__initGoogle&loading=async&v=weekly&language=es&region=PE`;
@@ -190,7 +190,7 @@ function cargarLeaflet() {
     MAP.obj = L.map("map").setView([S.ME.lat, S.ME.lng], 15);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(MAP.obj);
     MAP.obj.on("click", e => onMapClick(e.latlng.lat, e.latlng.lng));
-    dibujarMe(); dibujarMarkers(); renderStatus();
+    dibujarMe(); dibujarMarkers(); renderStatus(); encuadrar();
   };
   if (window.L) return go();
   const s = document.createElement("script"); s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s.onload = go; s.onerror = go; document.head.appendChild(s);
@@ -245,12 +245,26 @@ function abrirPopup(c) {
   if (MAP.kind === "google") { MAP.popup.setContent(popupHTML(c)); MAP.popup.open({ map: MAP.obj, anchor: MAP.markers[c.id] }); }
   else MAP.markers[c.id].bindPopup(popupHTML(c)).openPopup();
 }
+let encuadrado = false;
+// Ajusta el mapa para que se vean tu ubicación y las canchas más cercanas (una sola vez)
+function encuadrar(forzar) {
+  if (!MAP.obj || !S.canchas.length || (encuadrado && !forzar)) return;
+  const cerca = S.canchas.slice().sort((a, b) => distKm(a) - distKm(b)).slice(0, 4);
+  const pts = [S.ME, ...cerca];
+  if (MAP.kind === "google") {
+    const b = new google.maps.LatLngBounds(); pts.forEach(p => b.extend(p));
+    MAP.obj.fitBounds(b, 60);
+  } else {
+    MAP.obj.fitBounds(pts.map(p => [p.lat, p.lng]), { padding: [50, 50], maxZoom: 16 });
+  }
+  encuadrado = true;
+}
 function panTo(p) { if (!MAP.obj || !p) return; MAP.kind === "google" ? MAP.obj.panTo(p) : MAP.obj.panTo([p.lat, p.lng]); }
 function usarGPS(silencioso) {
   if (!navigator.geolocation) return silencioso || toast("Tu navegador no permite ubicación.");
   navigator.geolocation.getCurrentPosition(pos => {
     S.ME = { lat: pos.coords.latitude, lng: pos.coords.longitude }; S.gps = true;
-    dibujarMe(); panTo(S.ME); renderAll();
+    dibujarMe(); renderAll(); encuadrar(true);
     if (!silencioso) toast("Ubicación actualizada.");
   }, () => silencioso || toast("No se pudo obtener tu ubicación."), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
 }
