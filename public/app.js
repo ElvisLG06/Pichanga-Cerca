@@ -78,7 +78,7 @@ const S = {
   cargado: { canchas: false, partidos: false },
   modo: "jugar", tab: null, sel: null, cant: {}, busy: false,
   addMode: false, newLatLng: null, ME: { ...CENTRO }, gps: false,
-  cand: null, candBusy: false, candMsg: "",
+  cand: null, candBusy: false, candMsg: "", editId: null, moving: null,
 };
 const unsub = { inscritos: null, usuarios: null, perfil: null };
 
@@ -237,14 +237,16 @@ function dibujarMarkers() {
       const icon = { url: svgUrl(svg), scaledSize: new google.maps.Size(sel ? 53 : 44, sel ? 70 : 58), anchor: new google.maps.Point(sel ? 24 : 20, sel ? 67 : 56) };
       if (!m) { m = new google.maps.Marker({ map: MAP.obj, position: { lat: c.lat, lng: c.lng }, title: c.nombre, icon }); m.addListener("click", () => seleccionar(c.id)); MAP.markers[c.id] = m; }
       else if (m.__k !== key) m.setIcon(icon);
+      if (S.moving !== c.id && (m.__lat !== c.lat || m.__lng !== c.lng)) m.setPosition({ lat: c.lat, lng: c.lng });
       m.setZIndex(sel ? 100 : 10);
     } else {
       const icon = L.divIcon({ html: svg, className: "", iconSize: sel ? [53, 70] : [44, 58], iconAnchor: sel ? [24, 67] : [20, 56], popupAnchor: [0, -56] });
       if (!m) { m = L.marker([c.lat, c.lng], { icon, title: c.nombre }).addTo(MAP.obj); m.on("click", () => seleccionar(c.id)); MAP.markers[c.id] = m; }
       else if (m.__k !== key) m.setIcon(icon);
+      if (S.moving !== c.id && (m.__lat !== c.lat || m.__lng !== c.lng)) m.setLatLng([c.lat, c.lng]);
       m.setZIndexOffset(sel ? 1000 : 0);
     }
-    m.__k = key;
+    m.__k = key; if (S.moving !== c.id) { m.__lat = c.lat; m.__lng = c.lng; }
   });
   Object.keys(MAP.markers).forEach(id => { if (!vivos.has(id)) { quitar(MAP.markers[id]); delete MAP.markers[id]; } });
 }
@@ -279,13 +281,83 @@ function usarGPS(silencioso) {
 $("#gpsBtn").onclick = () => usarGPS(false);
 function onMapClick(lat, lng) {
   if (!S.addMode) return;
-  S.newLatLng = { lat, lng };
+  S.newLatLng = { lat, lng }; S.editId = null;
+  $("#fcTitle").textContent = "Nueva cancha"; $("#fcSubmit").textContent = "Agregar cancha";
   $("#fcCoords").textContent = `Ubicación: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   $("#fCancha").reset(); $("#fcPrecio").value = "Gratis";
   setAddMode(false); abrir("mCancha"); setTimeout(() => $("#fcNombre").focus(), 50);
 }
 function setAddMode(on) { S.addMode = on; $("#addMode").classList.toggle("on", on); }
 $("#addCancel").onclick = () => { setAddMode(false); renderPanel(); };
+
+/* ---------- editar datos y mover el pin (admin) ---------- */
+function editarCancha(id) {
+  const c = cancha(id); if (!c) return;
+  S.editId = id; S.newLatLng = null;
+  $("#fcTitle").textContent = "Editar cancha"; $("#fcSubmit").textContent = "Guardar cambios";
+  $("#fcNombre").value = c.nombre; $("#fcTipo").value = c.tipo; $("#fcPrecio").value = c.precio; $("#fcDir").value = c.dir;
+  $("#fcCoords").textContent = `Ubicación: ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · para cambiarla usa "Mover pin"`;
+  abrir("mCancha"); setTimeout(() => $("#fcNombre").focus(), 50);
+}
+function moverPin(id) {
+  const c = cancha(id), m = MAP.markers[id]; if (!c || !m) return toast("El mapa aún no carga.");
+  terminarMover(false);
+  S.moving = id;
+  if (MAP.kind === "google") { MAP.popup && MAP.popup.close(); m.setDraggable(true); MAP.obj.setZoom(Math.max(MAP.obj.getZoom(), 18)); MAP.obj.panTo(c); }
+  else { m.closePopup(); m.dragging.enable(); MAP.obj.setView([c.lat, c.lng], Math.max(MAP.obj.getZoom(), 18)); }
+  $("#moveBar").classList.add("on");
+}
+function terminarMover(guardar) {
+  const id = S.moving; if (!id) return;
+  const m = MAP.markers[id], c = cancha(id);
+  let pos = null;
+  if (m) {
+    if (MAP.kind === "google") { const p = m.getPosition(); pos = { lat: p.lat(), lng: p.lng() }; m.setDraggable(false); }
+    else { const p = m.getLatLng(); pos = { lat: p.lat, lng: p.lng }; m.dragging.disable(); }
+  }
+  S.moving = null; $("#moveBar").classList.remove("on");
+  if (guardar && pos && c && (pos.lat !== c.lat || pos.lng !== c.lng)) {
+    conBusy(() => updateDoc(doc(db, "canchas", id), { lat: pos.lat, lng: pos.lng }), "Ubicación actualizada.");
+  } else { dibujarMarkers(); }
+}
+$("#moveSave").onclick = () => terminarMover(true);
+$("#moveCancel").onclick = () => terminarMover(false);
+
+/* ---------- buscador de lugares (OpenStreetMap Nominatim) ---------- */
+let qTimer = null, qUltima = 0, qCtrl = null;
+function buscarLugar(texto) {
+  const q = texto.trim(); const box = $("#qres");
+  if (q.length < 3) { box.classList.remove("on"); return; }
+  const espera = Math.max(0, 1100 - (Date.now() - qUltima)); // máximo 1 consulta por segundo (política de Nominatim)
+  clearTimeout(qTimer);
+  qTimer = setTimeout(async () => {
+    qUltima = Date.now();
+    if (qCtrl) qCtrl.abort(); qCtrl = new AbortController();
+    const d = 0.25, vb = `${S.ME.lng - d},${S.ME.lat + d},${S.ME.lng + d},${S.ME.lat - d}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=pe&accept-language=es&viewbox=${vb}&q=${encodeURIComponent(q)}`;
+    try {
+      const r = await fetch(url, { signal: qCtrl.signal }); const xs = r.ok ? await r.json() : [];
+      box.innerHTML = xs.length ? xs.map((x, i) => {
+        const partes = String(x.display_name || "").split(", ");
+        return `<button data-i="${i}" data-lat="${Number(x.lat)}" data-lng="${Number(x.lon)}"><b>${esc(partes[0])}</b><small>${esc(partes.slice(1, 4).join(", "))}</small></button>`;
+      }).join("") : `<div class="none">Sin resultados. Prueba con otro nombre o agrega el distrito.</div>`;
+      box.classList.add("on");
+    } catch (e) { if (e.name !== "AbortError") { box.innerHTML = `<div class="none">No se pudo buscar. Intenta de nuevo.</div>`; box.classList.add("on"); } }
+  }, Math.max(espera, 450));
+}
+$("#q").addEventListener("input", e => buscarLugar(e.target.value));
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); const b = $("#qres button"); if (b && $("#qres").classList.contains("on")) b.click(); else buscarLugar(e.target.value); }
+  if (e.key === "Escape") $("#qres").classList.remove("on");
+});
+$("#qres").addEventListener("click", e => {
+  const b = e.target.closest("button[data-lat]"); if (!b || !MAP.obj) return;
+  const p = { lat: Number(b.dataset.lat), lng: Number(b.dataset.lng) };
+  if (MAP.kind === "google") { MAP.obj.setZoom(17); MAP.obj.panTo(p); } else MAP.obj.setView([p.lat, p.lng], 17);
+  $("#qres").classList.remove("on"); $("#q").blur();
+  if (S.addMode) toast("Ahora haz clic sobre la cancha.");
+});
+document.addEventListener("click", e => { if (!e.target.closest("#search")) $("#qres").classList.remove("on"); });
 
 /* =========================================================
    INTERFAZ
@@ -304,7 +376,7 @@ function renderHeader() {
     ? `<div class="uchip">${avatar(u.displayName, u.photoURL, u.uid)}<div class="nm">${esc(u.displayName || "Jugador")}<small>${S.isAdmin ? "Administrador" : esc(u.email || "")}</small></div></div><button class="out" data-logout>Salir</button>`
     : `<button class="gbtn" data-login style="padding:7px 14px;font-size:13px"><svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Entrar con Google</button>`;
 }
-$("#modes").onclick = e => { const b = e.target.closest("[data-m]"); if (!b) return; S.modo = b.dataset.m; S.tab = null; S.sel = null; setAddMode(false); renderAll(); };
+$("#modes").onclick = e => { const b = e.target.closest("[data-m]"); if (!b) return; terminarMover(false); S.modo = b.dataset.m; S.tab = null; S.sel = null; setAddMode(false); renderAll(); };
 function renderTabs() {
   const t = TABS[S.modo]; if (!S.tab || !t.some(([k]) => k === S.tab)) S.tab = t[0][0];
   $("#tabs").innerHTML = t.map(([k, l]) => `<button class="chip${S.tab === k && !S.sel ? " on" : ""}" data-tab="${k}">${l}</button>`).join("")
@@ -383,8 +455,11 @@ function detalleCancha() {
   return `<button class="back" data-a="volver">← Volver</button>
     <h2>${esc(c.nombre)}</h2>
     <div class="sub"><span class="tag">${esc(c.tipo)}</span><span>${esc(c.precio)}</span><span>·</span><span>${distKm(c).toFixed(1)} km de ti</span></div>
-    <div class="sub" style="margin-top:-4px">📍 ${esc(c.dir)} · <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">Cómo llegar</a>${c.fuente === "osm" ? ` · <span class="mm">Datos: © OpenStreetMap</span>` : ""}</div>
-    ${S.modo === "admin" ? `<div class="actions" style="margin:0 0 6px"><button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}">Eliminar cancha</button></div>` : ""}
+    <div class="sub" style="margin-top:-4px">📍 ${c.dir ? esc(c.dir) + " · " : ""}<a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">Cómo llegar</a>${c.fuente === "osm" ? ` · <span class="mm">Datos: © OpenStreetMap</span>` : ""}</div>
+    ${S.modo === "admin" ? `<div class="actions" style="margin:0 0 6px">
+      <button class="btn ghost sm" data-a="editarCancha" data-c="${c.id}">✏️ Editar datos</button>
+      <button class="btn ghost sm" data-a="moverPin" data-c="${c.id}">📍 Mover pin</button>
+      <button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}">Eliminar</button></div>` : ""}
     <div class="sec">Partidos por horario</div>
     ${ps.length ? ps.map(p => tarjeta(p, { conCancha: false })).join("") : `<div class="empty"><div class="big">⚽</div>No hay partidos publicados aquí.</div>`}
     ${S.modo !== "admin" ? `<button class="btn block" style="margin-top:4px" data-a="nuevo" data-c="${c.id}">+ Publicar partido en esta cancha</button>` : ""}`;
@@ -442,6 +517,7 @@ function vistaAdmin() {
       <div class="sec">Registradas (${S.canchas.length})</div>
       ${S.canchas.slice().sort((a, b) => distKm(a) - distKm(b)).map(c => { const e = estadoCancha(c); return `<div class="row"><div class="badge" style="background:${e.color}">${e.ps.length}</div>
         <div style="flex:1;min-width:0;cursor:pointer" data-a="ver" data-c="${c.id}"><div style="font-weight:600">${esc(c.nombre)}${c.ejemplo ? ' <span class="tag" style="background:#fdeccf;color:#a85a12">ejemplo</span>' : ""}</div><div class="mm">${esc(c.tipo)} · ${distKm(c).toFixed(1)} km${c.fuente === "osm" ? " · OpenStreetMap" : ""}</div></div>
+        <button class="btn ghost sm" data-a="editarCancha" data-c="${c.id}" title="Editar">✏️</button>
         <button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}" ${S.busy ? "disabled" : ""}>Eliminar</button></div>`; }).join("")}`;
   }
   if (S.tab === "usuarios") {
@@ -522,7 +598,9 @@ $("#panel").addEventListener("click", e => {
         await batch.commit();
       }, "Partido eliminado.");
     }
-    case "addCancha": setAddMode(!S.addMode); renderPanel(); if (S.addMode) toast("Ahora haz clic en el mapa."); return;
+    case "addCancha": setAddMode(!S.addMode); renderPanel(); if (S.addMode) toast("Busca el lugar o acerca el mapa y haz clic sobre la cancha."); return;
+    case "editarCancha": return editarCancha(b.dataset.c);
+    case "moverPin": return moverPin(b.dataset.c);
     case "borrarCancha": { const c = cancha(b.dataset.c);
       if (!confirmar("c" + c.id, `Toca otra vez para eliminar "${c.nombre}" y sus partidos.`)) return;
       return conBusy(async () => {
@@ -717,7 +795,14 @@ $("#fPartido").onsubmit = e => {
   }, "¡Partido publicado! Ya aparece en el mapa.");
 };
 $("#fCancha").onsubmit = e => {
-  e.preventDefault(); if (!S.newLatLng) return;
+  e.preventDefault();
+  if (S.editId) {
+    const id = S.editId; S.editId = null;
+    const upd = { nombre: $("#fcNombre").value.trim().slice(0, 50), tipo: $("#fcTipo").value, precio: $("#fcPrecio").value.trim().slice(0, 30) || "—", dir: $("#fcDir").value.trim().slice(0, 80) };
+    cerrar("mCancha");
+    return conBusy(() => updateDoc(doc(db, "canchas", id), upd), "Cancha actualizada.");
+  }
+  if (!S.newLatLng) return;
   const data = { nombre: $("#fcNombre").value.trim().slice(0, 50), tipo: $("#fcTipo").value, precio: $("#fcPrecio").value.trim().slice(0, 30) || "—",
     dir: $("#fcDir").value.trim().slice(0, 80), lat: S.newLatLng.lat, lng: S.newLatLng.lng, creadoEn: serverTimestamp() };
   cerrar("mCancha"); S.newLatLng = null;

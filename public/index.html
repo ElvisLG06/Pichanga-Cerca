@@ -22,7 +22,14 @@
   </header>
   <div class="mapwrap">
     <div id="map"><div class="mapmsg">Cargando mapa…</div></div>
+    <div class="search" id="search">
+      <input id="q" type="search" placeholder="Buscar dirección, parque o distrito…" autocomplete="off" aria-label="Buscar lugar">
+      <div class="qres" id="qres"></div>
+    </div>
     <div class="addmode" id="addMode">Haz clic en el mapa donde está la cancha · <u id="addCancel">cancelar</u></div>
+    <div class="addmode" id="moveBar">Arrastra el pin a la ubicación exacta
+      <button class="btn sm" id="moveSave" style="margin-left:8px;background:#fff;color:#5a2fc4">Guardar</button>
+      <u id="moveCancel" style="margin-left:6px">cancelar</u></div>
     <div class="floating"><button class="fbtn" id="gpsBtn">◎ Usar mi ubicación</button></div>
     <div class="legend">
       <span><i style="background:#136b40"></i>Buscan jugadores</span>
@@ -74,7 +81,7 @@
 <!-- Modal: nueva cancha (admin) -->
 <div class="modal-bg" id="mCancha">
   <form class="modal" id="fCancha">
-    <h3>Nueva cancha</h3>
+    <h3 id="fcTitle">Nueva cancha</h3>
     <label>Nombre</label><input id="fcNombre" maxlength="50" required placeholder="Ej: Loza del Parque Grau">
     <div class="grid2">
       <div><label>Tipo</label><select id="fcTipo"><option>Loza</option><option>Sintética</option><option>Grass natural</option><option>Tierra</option></select></div>
@@ -82,7 +89,7 @@
     </div>
     <label>Dirección / referencia</label><input id="fcDir" maxlength="80" placeholder="Ej: Jr. Los Pinos cuadra 2">
     <div class="hint" id="fcCoords"></div>
-    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn violet">Agregar cancha</button></div>
+    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn violet" id="fcSubmit">Agregar cancha</button></div>
   </form>
 </div>
 <div class="toast" id="toast"></div>
