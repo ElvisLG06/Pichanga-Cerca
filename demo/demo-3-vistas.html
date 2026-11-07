@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pichanga Cerca — Google Maps · 3 vistas</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --pitch:#0d4d2e; --pitch-2:#136b40; --lime:#c6f432; --ink:#132018; --muted:#5d6b62;
+    --line:#e3e7e1; --bg:#f5f6f2; --card:#fff; --orange:#f08a24; --red:#d64541; --blue:#2f7bf6; --violet:#6d3fd8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px}
+  button{font:inherit;cursor:pointer}
+  .app{display:grid;grid-template-columns:1fr 440px;grid-template-rows:auto 1fr;height:100vh}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--pitch);color:#fff;flex-wrap:wrap;
+    background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 60px,transparent 60px 120px)}
+  .logo{display:flex;align-items:center;gap:9px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:24px;text-transform:uppercase;letter-spacing:.4px}
+  .logo b{color:var(--lime)}
+  .roles{display:flex;gap:6px;background:rgba(0,0,0,.22);padding:4px;border-radius:999px;margin-left:8px}
+  .roles .lab{font-size:11.5px;opacity:.75;padding:0 6px 0 10px;align-self:center}
+  .role{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:5px 12px 5px 5px;background:transparent;color:#fff;font-weight:600;font-size:13px}
+  .role.on{background:#fff;color:var(--ink)}
+  .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;flex:none}
+  .mapbtn{margin-left:auto;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600;display:flex;gap:7px;align-items:center}
+  .mapbtn i{width:8px;height:8px;border-radius:50%;background:#9aa39c}
+  .mapbtn.g i{background:var(--lime)}
+
+  .mapwrap{position:relative;min-height:0}
+  #map{position:absolute;inset:0;background:#e9ebe4}
+  .mapmsg{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
+  .legend{position:absolute;left:12px;bottom:22px;background:rgba(255,255,255,.96);border-radius:12px;padding:8px 12px;display:flex;gap:12px;font-size:12px;box-shadow:0 2px 10px rgba(0,0,0,.1);z-index:500;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:50%}
+  .floating{position:absolute;right:12px;top:12px;z-index:500;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .fbtn{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:600;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .addmode{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--violet);color:#fff;padding:8px 14px;border-radius:999px;font-weight:600;z-index:500;display:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  .addmode.on{display:block}
+
+  aside{background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .who{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .who .n{font-weight:700}
+  .who .r{font-size:12px;color:var(--muted)}
+  .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;margin-left:auto;text-transform:uppercase;letter-spacing:.4px}
+  .tabs{display:flex;gap:6px;padding:10px 14px 0;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .chip.on{background:var(--pitch);border-color:var(--pitch);color:#fff}
+  .scroll{overflow:auto;padding:12px 14px 28px;flex:1}
+  h2{font-family:'Barlow Condensed',sans-serif;font-size:24px;margin:2px 0 4px;text-transform:uppercase;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .tag{background:#eef5e4;color:var(--pitch);border-radius:6px;padding:2px 7px;font-weight:600;font-size:11.5px}
+  .back{background:none;border:0;color:var(--pitch-2);font-weight:600;padding:0;margin-bottom:6px}
+  .sec{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-size:14px;margin:16px 0 8px;font-weight:700}
+  .match{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fff}
+  .match.mine{border-color:#cfe6a0;background:#fbfef5}
+  .mtop{display:flex;align-items:flex-start;gap:12px}
+  .time{background:var(--pitch);color:#fff;border-radius:10px;padding:6px 9px;text-align:center;min-width:64px}
+  .time .h{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;line-height:1}
+  .time .d{font-size:10.5px;opacity:.85;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+  .mt{font-weight:700;font-size:14.5px}
+  .mm{color:var(--muted);font-size:12px;margin-top:2px}
+  .faltan{margin-left:auto;text-align:right}
+  .faltan .n{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:800;line-height:.9;color:var(--pitch-2)}
+  .faltan .n.full{color:var(--red);font-size:18px}
+  .faltan .n.closed{color:var(--muted);font-size:16px}
+  .faltan small{display:block;color:var(--muted);font-size:11px}
+  .bar{height:7px;background:#edf0ea;border-radius:9px;margin:10px 0 6px;overflow:hidden;display:flex}
+  .bar .a{background:var(--pitch)} .bar .b{background:var(--lime)}
+  .stats{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .actions{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .step{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .step button{width:32px;height:34px;border:0;background:#f4f6f2;font-size:16px;font-weight:700}
+  .step button:disabled{opacity:.35;cursor:not-allowed}
+  .step span{min-width:34px;text-align:center;font-weight:700}
+  .btn{border:0;border-radius:10px;padding:9px 14px;font-weight:700;background:var(--pitch);color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:#fff;color:var(--red);border:1px solid #f1c9c8}
+  .btn.violet{background:var(--violet)}
+  .btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+  .going{background:#f2fbe0;border:1px solid #d9efa8;color:var(--pitch);border-radius:10px;padding:8px 10px;font-weight:600;font-size:12.5px;flex:1}
+  .warn{background:#fff3e6;border:1px solid #f6d2ad;color:#a85a12;border-radius:10px;padding:8px 10px;font-weight:600;font-size:12.5px;flex:1}
+  .empty{text-align:center;color:var(--muted);padding:26px 10px}
+  .empty .big{font-size:36px}
+  .row{display:flex;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff}
+  .row.click{cursor:pointer}
+  .row.click:hover{border-color:#cdd6c9}
+  .badge{min-width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+  .plist{border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}
+  .prow{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+  .prow .av{width:24px;height:24px;font-size:10px}
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+  .kpi .v{font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:800;line-height:1;color:var(--pitch)}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11.5px;padding:6px 4px;border-bottom:1px solid var(--line)}
+  td{padding:8px 4px;border-bottom:1px solid #f0f2ee;vertical-align:middle}
+  .banner{background:#fde8e8;color:#9b2c2c;border:1px solid #f5c2c2;border-radius:10px;padding:10px;font-weight:600;font-size:12.5px;margin-bottom:10px}
+  .tip{background:#f3f0fd;border:1px solid #ddd3fa;color:#4b2aa6;border-radius:10px;padding:10px;font-size:12.5px;margin-bottom:10px;line-height:1.45}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(10,20,14,.5);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px}
+  .modal-bg.on{display:flex}
+  .modal{background:#fff;border-radius:18px;width:100%;max-width:440px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
+  .modal h3{font-family:'Barlow Condensed',sans-serif;font-size:26px;text-transform:uppercase;margin:0 0 10px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:56px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;opacity:0;transition:.25s;z-index:3000;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .iw{font-family:Inter,sans-serif;min-width:200px}
+  .iw b{font-size:14px}
+  .iw .t{color:#5d6b62;font-size:12px;margin:2px 0 6px}
+  .iw .r{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;border-top:1px solid #eee}
+  .iw .f{font-weight:700;color:#136b40}
+  .iw .x{font-weight:700;color:#d64541}
+
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 50vh 1fr;height:auto;min-height:100vh}
+    aside{border-left:0;border-top:1px solid var(--line)}
+    .roles{margin-left:0;order:3;width:100%;overflow:auto}
+    .roles .lab{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#fff"/><path d="M16 9l5 3.6-1.9 5.9h-6.2L11 12.6z" fill="#132018"/><path d="M16 2v7M21 12.6l6.5-2.3M19.1 18.5l4 5.6M12.9 18.5l-4 5.6M11 12.6l-6.5-2.3" stroke="#132018" stroke-width="1.6"/></svg>
+      Pichanga <b>Cerca</b>
+    </div>
+    <div class="roles" id="roles"></div>
+    <button class="mapbtn" id="mapBtn"><i></i><span>Mapa</span></button>
+  </header>
+  <div class="mapwrap">
+    <div id="map"><div class="mapmsg">Cargando mapa…</div></div>
+    <div class="addmode" id="addMode">Haz clic en el mapa donde está la cancha · <u style="cursor:pointer" id="addCancel">cancelar</u></div>
+    <div class="floating">
+      <button class="fbtn" id="gpsBtn">◎ Usar mi ubicación</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:#136b40"></i>Buscan jugadores</span>
+      <span><i style="background:#f08a24"></i>Completo / cerrado</span>
+      <span><i style="background:#9aa39c"></i>Sin partidos</span>
+    </div>
+  </div>
+  <aside>
+    <div class="who" id="who"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="scroll" id="panel"></div>
+  </aside>
+</div>
+
+<!-- Modal: publicar partido -->
+<div class="modal-bg" id="mPartido">
+  <form class="modal" id="fPartido">
+    <h3 id="fpTitle">Publicar partido</h3>
+    <label>Cancha o loza</label><select id="fpCancha" required></select>
+    <label>Nombre del grupo</label><input id="fpEquipo" maxlength="40" placeholder="Ej: Los del barrio" required>
+    <div class="grid2">
+      <div><label>Fecha</label><input id="fpFecha" type="date" required></div>
+      <div><label>Hora</label><input id="fpHora" type="time" value="19:00" required></div>
+    </div>
+    <div class="grid2">
+      <div><label>¿Cuántos son?</label><input id="fpSomos" type="number" min="1" max="30" value="7" required></div>
+      <div><label>¿Cuántos necesitan?</label><input id="fpNec" type="number" min="1" max="30" value="3" required></div>
+    </div>
+    <div class="hint" id="fpTotal"></div>
+    <label>Nota (opcional)</label><textarea id="fpNota" maxlength="160" placeholder="Ej: S/ 10 c/u, traer polo oscuro."></textarea>
+    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Publicar</button></div>
+  </form>
+</div>
+
+<!-- Modal: nueva cancha (admin) -->
+<div class="modal-bg" id="mCancha">
+  <form class="modal" id="fCancha">
+    <h3>Nueva cancha</h3>
+    <label>Nombre</label><input id="fcNombre" maxlength="50" required placeholder="Ej: Loza del Parque Grau">
+    <div class="grid2">
+      <div><label>Tipo</label><select id="fcTipo"><option>Loza</option><option>Sintética</option><option>Grass natural</option><option>Tierra</option></select></div>
+      <div><label>Precio</label><input id="fcPrecio" maxlength="30" value="Gratis"></div>
+    </div>
+    <label>Dirección / referencia</label><input id="fcDir" maxlength="80" placeholder="Ej: Jr. Los Pinos cuadra 2">
+    <div class="hint" id="fcCoords"></div>
+    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn violet">Agregar cancha</button></div>
+  </form>
+</div>
+
+<!-- Modal: API key -->
+<div class="modal-bg" id="mKey">
+  <form class="modal" id="fKey">
+    <h3>Google Maps</h3>
+    <div class="hint" style="font-size:13px">Pega tu API key de Google Maps (Maps JavaScript API). Se guarda solo en este navegador.<br>
+      Sácala en <b>console.cloud.google.com</b> → APIs y servicios → Credenciales → Crear clave de API, y habilita <b>Maps JavaScript API</b>.</div>
+    <label>API key</label><input id="fkKey" placeholder="AIza..." autocomplete="off">
+    <div class="hint">Sin key la app usa OpenStreetMap, con las mismas funciones.</div>
+    <div class="mfoot">
+      <button type="button" class="btn ghost" id="fkClear">Usar OpenStreetMap</button>
+      <button class="btn">Cargar Google Maps</button>
+    </div>
+  </form>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIGURACIÓN — pega aquí tu API key para dejarla fija
+   ========================================================= */
+const GOOGLE_MAPS_API_KEY = "";
+
+const STORE = "pichanga-cerca-v2";
+const KEYSTORE = "pichanga-gmaps-key";
+const CENTRO = {lat:-12.1219, lng:-77.0300}; // Miraflores, Lima
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = (v, lo, hi, d) => { v = Math.round(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+const uid = p => p + Math.random().toString(36).slice(2, 9);
+const isoDate = d => d.toLocaleDateString("en-CA");
+const diaMas = n => { const d = new Date(); d.setDate(d.getDate()+n); return isoDate(d); };
+const hoy = () => diaMas(0);
+function diaLabel(f){
+  if (f === hoy()) return "Hoy"; if (f === diaMas(1)) return "Mañana";
+  const [y,m,d] = f.split("-").map(Number);
+  return new Date(y,m-1,d).toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"});
+}
+const cuando = p => { const [y,m,d] = p.fecha.split("-").map(Number); const [h,mi] = p.hora.split(":").map(Number); return new Date(y,m-1,d,h,mi).getTime(); };
+function km(a, b){
+  const R = 6371, r = x => x*Math.PI/180;
+  const dLat = r(b.lat-a.lat), dLng = r(b.lng-a.lng);
+  const h = Math.sin(dLat/2)**2 + Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+let toastT;
+function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3200); }
+
+/* ---------- datos de ejemplo ---------- */
+function seed(){
+  const o = (dLat, dLng) => ({lat: CENTRO.lat + dLat, lng: CENTRO.lng + dLng});
+  return {
+    usuarios: [
+      {id:"admin",  nombre:"Andrea Vega",    rol:"admin",   color:"#6d3fd8"},
+      {id:"carlos", nombre:"Carlos Ramírez", rol:"usuario", color:"#136b40"},
+      {id:"lucia",  nombre:"Lucía Torres",   rol:"usuario", color:"#2f7bf6"},
+      {id:"diego",  nombre:"Diego Salas",    rol:"usuario", color:"#e0679a"},
+      {id:"rosa",   nombre:"Rosa Medina",    rol:"usuario", color:"#d08a1b"},
+      {id:"mateo",  nombre:"Mateo Quispe",   rol:"usuario", color:"#0e8a8a"},
+    ],
+    canchas: [
+      {id:"c1", nombre:"Loza Parque Los Olivos",   tipo:"Loza",      precio:"Gratis",        dir:"Parque Los Olivos, cuadra 3",   ...o( 0.0060,-0.0080)},
+      {id:"c2", nombre:"Sintética El Golazo",      tipo:"Sintética", precio:"S/ 80 la hora", dir:"Av. Los Deportes 1240",          ...o( 0.0095, 0.0070)},
+      {id:"c3", nombre:"Loza Vecinal San Martín",  tipo:"Loza",      precio:"Gratis",        dir:"Jr. San Martín 410",             ...o(-0.0070,-0.0120)},
+      {id:"c4", nombre:"Complejo La Bombonera",    tipo:"Sintética", precio:"S/ 90 la hora", dir:"Av. Principal 2150",             ...o(-0.0040, 0.0115)},
+      {id:"c5", nombre:"Loza Parque Central",      tipo:"Loza",      precio:"Gratis",        dir:"Parque Central s/n",             ...o(-0.0012, 0.0018)},
+      {id:"c6", nombre:"Sintética Tiki Taka",      tipo:"Sintética", precio:"S/ 70 la hora", dir:"Calle Las Gardenias 88",         ...o( 0.0130,-0.0150)},
+      {id:"c7", nombre:"Loza Colegio Santa Rosa",  tipo:"Loza",      precio:"S/ 20 la hora", dir:"Jr. Santa Rosa 560",             ...o(-0.0125, 0.0060)},
+      {id:"c8", nombre:"Cancha El Potrero",        tipo:"Tierra",    precio:"Gratis",        dir:"Psje. El Potrero, al lado del mercado", ...o(-0.0110,-0.0030)},
+    ],
+    partidos: [
+      {id:"p1", canchaId:"c5", creador:"carlos", equipo:"Los del Parque",   fecha:diaMas(0), hora:"19:00", somos:7, necesitan:3, nota:"Fútbol 5, nivel tranqui.", estado:"abierto"},
+      {id:"p2", canchaId:"c2", creador:"carlos", equipo:"Los del Parque",   fecha:diaMas(1), hora:"10:00", somos:10, necesitan:4, nota:"S/ 7 cada uno, fútbol 7.", estado:"abierto"},
+      {id:"p3", canchaId:"c1", creador:"mateo",  equipo:"Pichanga Olivos",  fecha:diaMas(0), hora:"20:30", somos:8, necesitan:2, nota:"", estado:"abierto"},
+      {id:"p4", canchaId:"c4", creador:"mateo",  equipo:"Veteranos +35",    fecha:diaMas(1), hora:"17:00", somos:6, necesitan:4, nota:"Traer polo blanco.", estado:"abierto"},
+      {id:"p5", canchaId:"c3", creador:"rosa",   equipo:"Barrio San Martín",fecha:diaMas(2), hora:"18:00", somos:9, necesitan:5, nota:"", estado:"abierto"},
+    ],
+    inscritos: [
+      {id:"i1", pid:"p1", uid:"diego", cantidad:1},
+      {id:"i2", pid:"p2", uid:"rosa",  cantidad:2},
+      {id:"i3", pid:"p3", uid:"diego", cantidad:2},
+      {id:"i4", pid:"p4", uid:"rosa",  cantidad:1},
+    ],
+  };
+}
+let DB;
+function load(){ try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.canchas) return s; } catch(_){} return seed(); }
+function save(){ try { localStorage.setItem(STORE, JSON.stringify(DB)); } catch(_){} renderAll(); }
+DB = load();
+// Sincroniza entre pestañas: abre una pestaña por rol y verás los cambios al instante
+window.addEventListener("storage", e => { if (e.key === STORE && e.newValue){ try { DB = JSON.parse(e.newValue); renderAll(); } catch(_){} } });
+
+/* ---------- vistas / roles ---------- */
+const VISTAS = {
+  admin:  {uid:"admin",  titulo:"Administrador", desc:"Gestiona canchas, partidos y usuarios", pill:["Admin","#efe9fd","#5a2fc4"]},
+  carlos: {uid:"carlos", titulo:"Organizador",   desc:"Creó partidos y busca jugadores",       pill:["Creó partido","#eaf6d8","#0d4d2e"]},
+  lucia:  {uid:"lucia",  titulo:"Jugadora",      desc:"Busca un partido cerca para sumarse",   pill:["Quiere jugar","#e5effe","#1f5fd0"]},
+};
+const UI = { vista: (location.hash.slice(1) in VISTAS) ? location.hash.slice(1) : "lucia", tab:null, sel:null, cant:{}, addMode:false, newLatLng:null, ME:{...CENTRO} };
+const yo = () => DB.usuarios.find(u => u.id === VISTAS[UI.vista].uid);
+const usuario = id => DB.usuarios.find(u => u.id === id) || {id, nombre:"Usuario", color:"#888"};
+const ini = n => n.split(" ").map(s => s[0]).slice(0,2).join("").toUpperCase();
+const avatar = u => `<span class="av" style="background:${u.color}">${esc(ini(u.nombre))}</span>`;
+
+function renderRoles(){
+  $("#roles").innerHTML = `<span class="lab">Ver como:</span>` + Object.entries(VISTAS).map(([k,v]) => {
+    const u = usuario(v.uid);
+    return `<button class="role${UI.vista===k?" on":""}" data-v="${k}">${avatar(u)}${esc(u.nombre.split(" ")[0])} · ${v.titulo}</button>`;
+  }).join("");
+}
+$("#roles").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; cambiarVista(b.dataset.v); };
+function cambiarVista(v){
+  UI.vista = v; UI.tab = null; UI.sel = null; UI.cant = {}; setAddMode(false);
+  history.replaceState(null, "", "#"+v);
+  renderAll();
+}
+window.addEventListener("hashchange", () => { const v = location.hash.slice(1); if (v in VISTAS && v !== UI.vista) cambiarVista(v); });
+
+/* ---------- cálculos ---------- */
+const cancha = id => DB.canchas.find(c => c.id === id);
+const distKm = c => km(UI.ME, c);
+const inscritosDe = pid => DB.inscritos.filter(i => i.pid === pid);
+const sumados = pid => inscritosDe(pid).reduce((a,i) => a + i.cantidad, 0);
+const faltan = p => Math.max(0, p.necesitan - sumados(p.id));
+const abierto = p => p.estado !== "cerrado" && faltan(p) > 0;
+const miInsc = pid => DB.inscritos.find(i => i.pid === pid && i.uid === yo().id);
+const vigentes = () => DB.partidos.filter(p => cancha(p.canchaId) && cuando(p) > Date.now() - 60*60*1000).sort((a,b) => cuando(a)-cuando(b));
+function estadoCancha(c){
+  const ps = vigentes().filter(p => p.canchaId === c.id);
+  const ab = ps.filter(abierto);
+  return {ps, ab, faltanTot: ab.reduce((a,p) => a + faltan(p), 0), color: ab.length ? "#136b40" : ps.length ? "#f08a24" : "#9aa39c"};
+}
+
+/* =========================================================
+   MAPA — Google Maps (con key) o OpenStreetMap (respaldo)
+   ========================================================= */
+const MAP = { kind:null, obj:null, markers:{}, me:null, popup:null };
+function pinSVG(color, n, sel){
+  const s = sel ? 1.2 : 1, w = 44*s, h = 58*s;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 44 58">
+    <path d="M20 56 C14 44 2 36 2 22 A18 18 0 1 1 38 22 C38 36 26 44 20 56Z" fill="${color}" stroke="${sel?"#c6f432":"#fff"}" stroke-width="${sel?4:2.5}"/>
+    <rect x="11" y="15" width="18" height="13" rx="1.5" fill="none" stroke="#fff" stroke-width="1.6"/>
+    <line x1="20" y1="15" x2="20" y2="28" stroke="#fff" stroke-width="1.4"/><circle cx="20" cy="21.5" r="2.6" fill="none" stroke="#fff" stroke-width="1.3"/>
+    ${n ? `<circle cx="34" cy="10" r="9" fill="#c6f432" stroke="#0d4d2e" stroke-width="2"/><text x="34" y="14" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="11" fill="#0d4d2e">${n}</text>` : ""}
+  </svg>`;
+}
+const svgUrl = s => "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(s);
+function popupHTML(c){
+  const {ps} = estadoCancha(c);
+  const rows = ps.length ? ps.slice(0,5).map(p => `<div class="r"><span>${esc(diaLabel(p.fecha))} ${esc(p.hora)} · ${esc(p.equipo)}</span>${abierto(p) ? `<span class="f">faltan ${faltan(p)}</span>` : `<span class="x">${p.estado==="cerrado"?"cerrado":"lleno"}</span>`}</div>`).join("") : `<div class="r"><span>Sin partidos publicados</span></div>`;
+  return `<div class="iw"><b>${esc(c.nombre)}</b><div class="t">${esc(c.tipo)} · ${esc(c.precio)} · ${distKm(c).toFixed(1)} km</div>${rows}</div>`;
+}
+
+function cargarMapa(){
+  const key = GOOGLE_MAPS_API_KEY || (() => { try { return localStorage.getItem(KEYSTORE) || ""; } catch(_){ return ""; } })();
+  if (key) cargarGoogle(key); else cargarLeaflet();
+}
+function cargarGoogle(key){
+  window.gm_authFailure = () => { toast("Google rechazó la API key. Usando OpenStreetMap."); try{localStorage.removeItem(KEYSTORE)}catch(_){}; destruirMapa(); cargarLeaflet(); };
+  window.__initGoogle = () => {
+    destruirMapa();
+    MAP.kind = "google";
+    $("#map").innerHTML = "";
+    MAP.obj = new google.maps.Map($("#map"), {
+      center: UI.ME, zoom: 15, mapTypeControl:false, streetViewControl:false, fullscreenControl:false, clickableIcons:false,
+      styles:[{featureType:"poi.business",stylers:[{visibility:"off"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#cfe6bf"}]}],
+    });
+    MAP.popup = new google.maps.InfoWindow();
+    MAP.obj.addListener("click", e => onMapClick(e.latLng.lat(), e.latLng.lng()));
+    dibujarMe(); dibujarMarkers(); estadoMapaBtn();
+  };
+  const s = document.createElement("script");
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__initGoogle&loading=async&v=weekly&language=es&region=PE`;
+  s.async = true;
+  s.onerror = () => { toast("No se pudo cargar Google Maps. Usando OpenStreetMap."); cargarLeaflet(); };
+  document.head.appendChild(s);
+}
+function cargarLeaflet(){
+  if (MAP.kind === "osm") return;
+  const go = () => {
+    if (!window.L){ $("#map").innerHTML = `<div class="mapmsg">No se pudo cargar el mapa (sin conexión).<br>El panel de la derecha sigue funcionando.</div>`; estadoMapaBtn(); return; }
+    destruirMapa();
+    MAP.kind = "osm";
+    $("#map").innerHTML = "";
+    MAP.obj = L.map("map", {zoomControl:true}).setView([UI.ME.lat, UI.ME.lng], 15);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(MAP.obj);
+    MAP.obj.on("click", e => onMapClick(e.latlng.lat, e.latlng.lng));
+    dibujarMe(); dibujarMarkers(); estadoMapaBtn();
+  };
+  if (window.L) return go();
+  const s = document.createElement("script");
+  s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  s.onload = go; s.onerror = go;
+  document.head.appendChild(s);
+}
+function destruirMapa(){
+  Object.values(MAP.markers).forEach(m => MAP.kind==="google" ? m.setMap(null) : m.remove && m.remove());
+  MAP.markers = {};
+  if (MAP.me){ MAP.kind==="google" ? MAP.me.forEach(x=>x.setMap(null)) : MAP.me.forEach(x=>x.remove()); MAP.me = null; }
+  if (MAP.kind === "osm" && MAP.obj) MAP.obj.remove();
+  MAP.obj = null; MAP.kind = null;
+}
+function dibujarMe(){
+  if (!MAP.obj) return;
+  if (MAP.me){ MAP.kind==="google" ? MAP.me.forEach(x=>x.setMap(null)) : MAP.me.forEach(x=>x.remove()); }
+  if (MAP.kind === "google"){
+    MAP.me = [
+      new google.maps.Circle({map:MAP.obj, center:UI.ME, radius:2000, strokeColor:"#2f7bf6", strokeOpacity:.35, strokeWeight:1, fillColor:"#2f7bf6", fillOpacity:.06, clickable:false}),
+      new google.maps.Marker({map:MAP.obj, position:UI.ME, title:"Tú estás aquí", zIndex:1, icon:{path:google.maps.SymbolPath.CIRCLE, scale:8, fillColor:"#2f7bf6", fillOpacity:1, strokeColor:"#fff", strokeWeight:3}}),
+    ];
+  } else {
+    MAP.me = [
+      L.circle([UI.ME.lat,UI.ME.lng], {radius:2000, color:"#2f7bf6", weight:1, opacity:.4, fillOpacity:.06, interactive:false}).addTo(MAP.obj),
+      L.circleMarker([UI.ME.lat,UI.ME.lng], {radius:8, color:"#fff", weight:3, fillColor:"#2f7bf6", fillOpacity:1}).bindTooltip("Tú estás aquí").addTo(MAP.obj),
+    ];
+  }
+}
+function dibujarMarkers(){
+  if (!MAP.obj) return;
+  const vivos = new Set();
+  DB.canchas.forEach(c => {
+    vivos.add(c.id);
+    const {color, faltanTot} = estadoCancha(c);
+    const sel = UI.sel === c.id;
+    const svg = pinSVG(color, faltanTot, sel);
+    const key = color + faltanTot + sel;
+    let m = MAP.markers[c.id];
+    if (MAP.kind === "google"){
+      const icon = {url:svgUrl(svg), scaledSize:new google.maps.Size(sel?53:44, sel?70:58), anchor:new google.maps.Point(sel?24:20, sel?67:56)};
+      if (!m){
+        m = new google.maps.Marker({map:MAP.obj, position:{lat:c.lat,lng:c.lng}, title:c.nombre, icon, zIndex:10});
+        m.addListener("click", () => seleccionar(c.id, true));
+        MAP.markers[c.id] = m;
+      } else if (m.__k !== key) m.setIcon(icon);
+      m.setZIndex(sel ? 100 : 10);
+    } else {
+      const icon = L.divIcon({html:svg, className:"", iconSize:sel?[53,70]:[44,58], iconAnchor:sel?[24,67]:[20,56], popupAnchor:[0,-56]});
+      if (!m){
+        m = L.marker([c.lat,c.lng], {icon, title:c.nombre}).addTo(MAP.obj);
+        m.on("click", () => seleccionar(c.id, true));
+        MAP.markers[c.id] = m;
+      } else if (m.__k !== key) m.setIcon(icon);
+      m.setZIndexOffset(sel ? 1000 : 0);
+    }
+    m.__k = key;
+  });
+  Object.keys(MAP.markers).forEach(id => { if (!vivos.has(id)){ const m = MAP.markers[id]; MAP.kind==="google" ? m.setMap(null) : m.remove(); delete MAP.markers[id]; } });
+}
+function abrirPopup(c){
+  if (!MAP.obj) return;
+  if (MAP.kind === "google"){ MAP.popup.setContent(popupHTML(c)); MAP.popup.open({map:MAP.obj, anchor:MAP.markers[c.id]}); }
+  else MAP.markers[c.id].bindPopup(popupHTML(c)).openPopup();
+}
+function panTo(p){ if (!MAP.obj) return; MAP.kind==="google" ? MAP.obj.panTo(p) : MAP.obj.panTo([p.lat,p.lng]); }
+function estadoMapaBtn(){
+  const b = $("#mapBtn");
+  b.classList.toggle("g", MAP.kind === "google");
+  b.querySelector("span").textContent = MAP.kind === "google" ? "Google Maps activo" : MAP.kind === "osm" ? "OpenStreetMap · Conectar Google Maps" : "Sin mapa";
+}
+$("#mapBtn").onclick = () => { try { $("#fkKey").value = localStorage.getItem(KEYSTORE) || ""; } catch(_){} abrir("mKey"); };
+$("#fKey").onsubmit = e => {
+  e.preventDefault(); const k = $("#fkKey").value.trim(); if (!k) return toast("Pega una API key.");
+  try { localStorage.setItem(KEYSTORE, k); } catch(_){}
+  cerrar("mKey"); destruirMapa(); $("#map").innerHTML = `<div class="mapmsg">Cargando Google Maps…</div>`;
+  if (window.google && window.google.maps){ location.reload(); return; }
+  cargarGoogle(k);
+};
+$("#fkClear").onclick = () => { try { localStorage.removeItem(KEYSTORE); } catch(_){} cerrar("mKey"); if (MAP.kind === "google") location.reload(); };
+$("#gpsBtn").onclick = () => {
+  if (!navigator.geolocation) return toast("Tu navegador no permite ubicación.");
+  navigator.geolocation.getCurrentPosition(pos => {
+    UI.ME = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+    dibujarMe(); panTo(UI.ME); renderPanel();
+    const cerca = DB.canchas.some(c => distKm(c) < 3);
+    toast(cerca ? "Ubicación actualizada." : "Ubicación actualizada. Las canchas de ejemplo están en Miraflores; el admin puede agregar canchas cerca de ti.");
+  }, () => toast("No se pudo obtener tu ubicación (permiso denegado)."), {enableHighAccuracy:true, timeout:8000});
+};
+
+function onMapClick(lat, lng){
+  if (!UI.addMode) return;
+  UI.newLatLng = {lat, lng};
+  $("#fcCoords").textContent = `Ubicación: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  $("#fCancha").reset(); $("#fcPrecio").value = "Gratis";
+  setAddMode(false); abrir("mCancha"); setTimeout(() => $("#fcNombre").focus(), 50);
+}
+function setAddMode(on){ UI.addMode = on; $("#addMode").classList.toggle("on", on); }
+$("#addCancel").onclick = () => setAddMode(false);
+
+/* =========================================================
+   PANEL — cambia según la vista
+   ========================================================= */
+const TABS = {
+  lucia:  [["cerca","Cerca de ti"],["mios","Mis partidos"]],
+  carlos: [["mios","Mis partidos publicados"],["explorar","Explorar"]],
+  admin:  [["resumen","Resumen"],["partidos","Partidos"],["canchas","Canchas"],["usuarios","Usuarios"]],
+};
+function renderWho(){
+  const v = VISTAS[UI.vista], u = yo();
+  $("#who").innerHTML = `${avatar(u)}<div><div class="n">${esc(u.nombre)}</div><div class="r">${v.desc}</div></div>
+    <span class="pill" style="background:${v.pill[1]};color:${v.pill[2]}">${v.pill[0]}</span>`;
+}
+function renderTabs(){
+  const t = TABS[UI.vista]; if (!UI.tab) UI.tab = t[0][0];
+  $("#tabs").innerHTML = t.map(([k,l]) => `<button class="chip${UI.tab===k && !UI.sel?" on":""}" data-tab="${k}">${l}</button>`).join("")
+    + (UI.vista==="carlos" ? `<button class="btn sm" style="margin-left:auto" data-a="nuevo">+ Publicar</button>` : "");
+}
+$("#tabs").onclick = e => {
+  const b = e.target.closest("[data-tab]"); if (b){ UI.tab = b.dataset.tab; UI.sel = null; renderAll(); return; }
+  if (e.target.closest("[data-a=nuevo]")) abrirPartido();
+};
+
+function seleccionar(id, desdeMapa){
+  UI.sel = id;
+  const c = cancha(id);
+  if (c){ panTo(c); abrirPopup(c); }
+  renderAll(); $("#panel").scrollTop = 0;
+}
+
+/* ---- tarjeta de partido (depende del rol) ---- */
+function tarjeta(p, opts={}){
+  const c = cancha(p.canchaId), f = faltan(p), sum = sumados(p.id), total = p.somos + p.necesitan;
+  const org = usuario(p.creador), me = yo();
+  const esMio = p.creador === me.id;
+  const ins = inscritosDe(p.id);
+  let derecha = p.estado === "cerrado" ? `<div class="n closed">Cerrado</div>` : f > 0 ? `<div class="n">${f}</div><small>faltan</small>` : `<div class="n full">Lleno</div>`;
+  let acciones = "", extra = "";
+
+  if (UI.vista === "lucia"){
+    const mia = miInsc(p.id);
+    const maxCant = f + (mia ? mia.cantidad : 0);
+    const cant = Math.min(Math.max(1, UI.cant[p.id] || (mia ? mia.cantidad : 1)), Math.max(1, maxCant));
+    if (me.bloqueado) acciones = `<div class="warn">Tu cuenta está suspendida.</div>`;
+    else if (mia){
+      acciones = `<div class="going">✓ Vas${mia.cantidad>1 ? ` con ${mia.cantidad-1} más` : ""}</div>
+        <div class="step"><button data-a="menos" data-p="${p.id}" ${cant<=1?"disabled":""}>−</button><span>${cant}</span><button data-a="mas" data-p="${p.id}" ${cant>=maxCant?"disabled":""}>+</button></div>
+        ${cant!==mia.cantidad ? `<button class="btn" data-a="unirse" data-p="${p.id}">Guardar</button>` : ""}
+        <button class="btn danger" data-a="salir" data-p="${p.id}">Ya no voy</button>`;
+    } else if (abierto(p)){
+      acciones = `<div class="step" title="¿Cuántos van, contándote?"><button data-a="menos" data-p="${p.id}" ${cant<=1?"disabled":""}>−</button><span>${cant}</span><button data-a="mas" data-p="${p.id}" ${cant>=f?"disabled":""}>+</button></div>
+        <button class="btn" data-a="unirse" data-p="${p.id}">${cant>1 ? `Nos sumamos (${cant})` : "Me sumo"}</button>
+        <span class="mm">${cant>1 ? `Tú + ${cant-1} amigo${cant>2?"s":""}` : "Solo tú"}</span>`;
+    } else acciones = `<div class="warn">${p.estado==="cerrado" ? "El organizador cerró la convocatoria" : "Equipo completo"}</div>`;
+  }
+
+  if (UI.vista === "carlos" && esMio){
+    acciones = `<span class="mm">Cupos:</span>
+      <div class="step"><button data-a="necMenos" data-p="${p.id}" ${p.necesitan<=Math.max(1,sum)?"disabled":""}>−</button><span>${p.necesitan}</span><button data-a="necMas" data-p="${p.id}" ${p.necesitan>=30?"disabled":""}>+</button></div>
+      <button class="btn ghost sm" data-a="toggle" data-p="${p.id}">${p.estado==="cerrado" ? "Reabrir" : "Cerrar convocatoria"}</button>
+      <button class="btn danger sm" data-a="borrar" data-p="${p.id}">Eliminar</button>`;
+    extra = `<div class="plist"><div class="mm" style="font-weight:600;margin-bottom:4px">Jugadores que se sumaron (${sum}/${p.necesitan})</div>
+      ${ins.length ? ins.map(i => { const u = usuario(i.uid); return `<div class="prow">${avatar(u)}<span style="flex:1">${esc(u.nombre)}${i.cantidad>1 ? ` <b>+${i.cantidad-1}</b>` : ""}</span><button class="btn ghost sm" data-a="quitar" data-i="${i.id}">Quitar</button></div>`; }).join("") : `<div class="mm">Todavía nadie. Comparte tu partido.</div>`}</div>`;
+  } else if (UI.vista === "carlos"){
+    acciones = abierto(p) ? `<span class="mm">Organiza ${esc(org.nombre)}</span>` : "";
+  }
+
+  if (UI.vista === "admin"){
+    acciones = `<span class="mm" style="flex:1">${ins.length} inscripción${ins.length===1?"":"es"} · ${sum} jugadores</span>
+      <button class="btn ghost sm" data-a="toggle" data-p="${p.id}">${p.estado==="cerrado" ? "Reabrir" : "Cerrar"}</button>
+      <button class="btn danger sm" data-a="borrar" data-p="${p.id}">Eliminar</button>`;
+  }
+
+  return `<div class="match${esMio && UI.vista==="carlos" ? " mine" : ""}">
+    <div class="mtop">
+      <div class="time"><div class="h">${esc(p.hora)}</div><div class="d">${esc(diaLabel(p.fecha))}</div></div>
+      <div style="min-width:0;flex:1">
+        <div class="mt">${esc(p.equipo)}</div>
+        <div class="mm">${opts.conCancha!==false ? `<a href="#" data-a="ver" data-c="${c.id}" style="color:inherit">📍 ${esc(c.nombre)}</a> · ${distKm(c).toFixed(1)} km` : `<span class="av" style="width:18px;height:18px;font-size:8px;display:inline-grid;vertical-align:middle;background:${org.color}">${esc(ini(org.nombre))}</span> Organiza ${esc(org.nombre)}`}</div>
+        ${p.nota ? `<div class="mm" style="margin-top:3px">“${esc(p.nota)}”</div>` : ""}
+      </div>
+      <div class="faltan">${derecha}</div>
+    </div>
+    <div class="bar"><div class="a" style="width:${p.somos/total*100}%"></div><div class="b" style="width:${Math.min(sum,p.necesitan)/total*100}%"></div></div>
+    <div class="stats"><span>Son ${p.somos} · buscan ${p.necesitan}</span><span>${Math.min(sum,p.necesitan)}/${p.necesitan} se sumaron</span></div>
+    ${UI.vista==="lucia" && ins.length ? `<div class="mm" style="margin-top:6px">Se sumaron: ${ins.map(i => esc(i.uid===me.id ? "Tú" : usuario(i.uid).nombre.split(" ")[0]) + (i.cantidad>1?` +${i.cantidad-1}`:"")).join(", ")}</div>` : ""}
+    ${extra}
+    ${acciones ? `<div class="actions">${acciones}</div>` : ""}
+  </div>`;
+}
+
+/* ---- detalle de cancha (común) ---- */
+function detalleCancha(){
+  const c = cancha(UI.sel); if (!c){ UI.sel = null; return renderPanel(); }
+  const ps = vigentes().filter(p => p.canchaId === c.id);
+  const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`;
+  return `<button class="back" data-a="volver">← Volver</button>
+    <h2>${esc(c.nombre)}</h2>
+    <div class="sub"><span class="tag">${esc(c.tipo)}</span><span>${esc(c.precio)}</span><span>·</span><span>${distKm(c).toFixed(1)} km de ti</span></div>
+    <div class="sub" style="margin-top:-4px">📍 ${esc(c.dir || "")} · <a href="${gmaps}" target="_blank" rel="noopener">Cómo llegar</a></div>
+    ${UI.vista==="admin" ? `<div class="actions" style="margin:0 0 6px"><button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}">Eliminar cancha</button></div>` : ""}
+    <div class="sec">Partidos por horario</div>
+    ${ps.length ? ps.map(p => tarjeta(p,{conCancha:false})).join("") : `<div class="empty"><div class="big">⚽</div>No hay partidos publicados aquí.</div>`}
+    ${UI.vista==="carlos" ? `<button class="btn" style="width:100%;margin-top:4px" data-a="nuevo" data-c="${c.id}">+ Publicar partido en esta cancha</button>` : ""}`;
+}
+
+/* ---- vistas ---- */
+function vistaLucia(){
+  const me = yo();
+  if (UI.tab === "mios"){
+    const mis = vigentes().filter(p => miInsc(p.id));
+    return `<h2>Mis partidos</h2><div class="sub">Partidos a los que te sumaste.</div>
+      ${mis.length ? mis.map(p => tarjeta(p)).join("") : `<div class="empty"><div class="big">🗓️</div>Aún no te has sumado a ningún partido.<br>Mira la pestaña "Cerca de ti".</div>`}`;
+  }
+  const ab = vigentes().filter(p => abierto(p) && !miInsc(p.id))
+    .sort((a,b) => (cuando(a)-cuando(b)) || (distKm(cancha(a.canchaId)) - distKm(cancha(b.canchaId))));
+  return `${me.bloqueado ? `<div class="banner">Tu cuenta fue suspendida por el administrador.</div>` : ""}
+    <h2>Partidos cerca de ti</h2><div class="sub">Equipos que buscan jugadores a menos de 2 km. Toca un pin del mapa para ver sus horarios.</div>
+    ${ab.length ? ab.map(p => tarjeta(p)).join("") : `<div class="empty"><div class="big">🥅</div>Nadie busca jugadores ahora mismo.</div>`}
+    ${listaCanchas()}`;
+}
+function vistaCarlos(){
+  const me = yo();
+  if (UI.tab === "explorar"){
+    return `<h2>Explorar</h2><div class="sub">Todos los partidos de la zona.</div>${vigentes().map(p => tarjeta(p)).join("") || `<div class="empty">No hay partidos.</div>`}${listaCanchas()}`;
+  }
+  const mios = vigentes().filter(p => p.creador === me.id);
+  const totalF = mios.filter(abierto).reduce((a,p) => a + faltan(p), 0);
+  return `${me.bloqueado ? `<div class="banner">Tu cuenta fue suspendida por el administrador.</div>` : ""}
+    <h2>Mis partidos publicados</h2>
+    <div class="sub">${mios.length} partido${mios.length===1?"":"s"} · ${totalF ? `te faltan ${totalF} jugador${totalF===1?"":"es"}` : "todo completo"}</div>
+    ${mios.length ? mios.map(p => tarjeta(p)).join("") : `<div class="empty"><div class="big">📣</div>No tienes partidos publicados.</div>`}
+    <button class="btn" style="width:100%" data-a="nuevo" ${me.bloqueado?"disabled":""}>+ Publicar nuevo partido</button>`;
+}
+function vistaAdmin(){
+  if (UI.tab === "partidos"){
+    const ps = vigentes();
+    return `<h2>Todos los partidos</h2><div class="sub">${ps.length} vigentes. Puedes cerrarlos o eliminarlos.</div>${ps.map(p => tarjeta(p)).join("") || `<div class="empty">No hay partidos.</div>`}`;
+  }
+  if (UI.tab === "canchas"){
+    return `<h2>Canchas y lozas</h2>
+      <div class="tip">Para agregar una cancha, toca <b>Agregar cancha</b> y luego haz clic en su ubicación exacta en el mapa.</div>
+      <button class="btn violet" style="width:100%;margin-bottom:10px" data-a="addCancha">${UI.addMode ? "Haz clic en el mapa…" : "+ Agregar cancha"}</button>
+      ${DB.canchas.map(c => { const e = estadoCancha(c); return `<div class="row"><div class="badge" style="background:${e.color}">${e.ps.length}</div>
+        <div style="flex:1;min-width:0;cursor:pointer" data-a="ver" data-c="${c.id}"><div style="font-weight:600">${esc(c.nombre)}</div><div class="mm">${esc(c.tipo)} · ${esc(c.precio)} · ${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}</div></div>
+        <button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}">Eliminar</button></div>`; }).join("")}`;
+  }
+  if (UI.tab === "usuarios"){
+    return `<h2>Usuarios</h2><div class="sub">Puedes suspender cuentas que publiquen partidos falsos.</div>
+      <table><tr><th>Usuario</th><th>Creó</th><th>Se sumó</th><th></th></tr>
+      ${DB.usuarios.map(u => `<tr><td><div style="display:flex;gap:8px;align-items:center">${avatar(u)}<div><div style="font-weight:600">${esc(u.nombre)}</div><div class="mm">${u.rol==="admin"?"Administrador":"Usuario"}${u.bloqueado?' · <b style="color:#d64541">suspendido</b>':""}</div></div></div></td>
+        <td>${DB.partidos.filter(p=>p.creador===u.id).length}</td><td>${DB.inscritos.filter(i=>i.uid===u.id).length}</td>
+        <td>${u.rol!=="admin" ? `<button class="btn ${u.bloqueado?"ghost":"danger"} sm" data-a="bloquear" data-u="${u.id}">${u.bloqueado?"Reactivar":"Suspender"}</button>` : ""}</td></tr>`).join("")}
+      </table>`;
+  }
+  const ps = vigentes();
+  const k = [
+    [DB.canchas.length, "Canchas registradas"],
+    [ps.length, "Partidos vigentes"],
+    [ps.filter(abierto).reduce((a,p)=>a+faltan(p),0), "Jugadores buscados"],
+    [DB.inscritos.reduce((a,i)=>a+i.cantidad,0), "Jugadores sumados"],
+  ];
+  const top = DB.canchas.map(c => ({c, n: estadoCancha(c).ps.length})).sort((a,b)=>b.n-a.n);
+  const max = Math.max(1, ...top.map(t=>t.n));
+  return `<h2>Panel de administración</h2><div class="sub">Actividad en tiempo real de la plataforma.</div>
+    <div class="kpis">${k.map(([v,l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("")}</div>
+    <div class="sec">Partidos por cancha</div>
+    ${top.map(t => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12.5px"><span style="width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.c.nombre)}</span><div style="flex:1;background:#edf0ea;border-radius:6px;height:10px"><div style="width:${t.n/max*100}%;background:var(--pitch-2);height:10px;border-radius:6px"></div></div><b style="width:18px;text-align:right">${t.n}</b></div>`).join("")}
+    <div class="sec">Datos de prueba</div>
+    <button class="btn ghost" style="width:100%" data-a="reset">Restablecer datos de ejemplo</button>`;
+}
+function listaCanchas(){
+  const xs = DB.canchas.map(c => ({c, ...estadoCancha(c)})).sort((a,b) => distKm(a.c)-distKm(b.c));
+  return `<div class="sec">Canchas y lozas cercanas</div>` + xs.map(({c,ps,ab,color}) => `<div class="row click" data-a="ver" data-c="${c.id}">
+    <div class="badge" style="background:${color}">${ps.length}</div>
+    <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.nombre)}</div><div class="mm">${esc(c.tipo)} · ${distKm(c).toFixed(1)} km · ${ab.length ? `${ab.length} buscando jugadores` : ps.length ? "completos" : "sin partidos"}</div></div><span class="mm">›</span></div>`).join("");
+}
+function renderPanel(){
+  $("#panel").innerHTML = UI.sel ? detalleCancha() : UI.vista === "admin" ? vistaAdmin() : UI.vista === "carlos" ? vistaCarlos() : vistaLucia();
+}
+function renderAll(){ renderRoles(); renderWho(); renderTabs(); renderPanel(); dibujarMarkers(); }
+
+/* ---------- acciones ---------- */
+let pendienteBorrar = null;
+function confirmar(clave, msg){
+  if (pendienteBorrar === clave){ pendienteBorrar = null; return true; }
+  pendienteBorrar = clave; toast(msg); setTimeout(() => { if (pendienteBorrar === clave) pendienteBorrar = null; }, 4000); return false;
+}
+$("#panel").addEventListener("click", e => {
+  const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
+  e.preventDefault();
+  const a = b.dataset.a, p = DB.partidos.find(x => x.id === b.dataset.p), me = yo();
+  switch (a){
+    case "volver": UI.sel = null; if (MAP.popup && MAP.kind==="google") MAP.popup.close(); return renderAll();
+    case "ver": return seleccionar(b.dataset.c);
+    case "nuevo": return abrirPartido(b.dataset.c);
+    case "mas": case "menos": {
+      const mia = miInsc(p.id), maxC = faltan(p) + (mia ? mia.cantidad : 0);
+      const cur = Math.min(Math.max(1, UI.cant[p.id] || (mia ? mia.cantidad : 1)), Math.max(1,maxC));
+      UI.cant[p.id] = a === "mas" ? Math.min(maxC, cur+1) : Math.max(1, cur-1);
+      return renderPanel();
+    }
+    case "unirse": {
+      if (me.bloqueado) return toast("Tu cuenta está suspendida.");
+      const mia = miInsc(p.id), maxC = faltan(p) + (mia ? mia.cantidad : 0);
+      const cant = Math.min(Math.max(1, UI.cant[p.id] || (mia ? mia.cantidad : 1)), maxC);
+      if (cant < 1) return toast("Ya no quedan cupos.");
+      if (mia) mia.cantidad = cant; else DB.inscritos.push({id:uid("i"), pid:p.id, uid:me.id, cantidad:cant});
+      delete UI.cant[p.id]; save();
+      return toast(`¡Listo! ${cant>1 ? `Te sumaste con ${cant-1} más` : "Te sumaste"}. Faltan ${faltan(p)}.`);
+    }
+    case "salir": DB.inscritos = DB.inscritos.filter(i => !(i.pid===p.id && i.uid===me.id)); delete UI.cant[p.id]; save(); return toast("Saliste del partido. Se liberaron los cupos.");
+    case "necMas": p.necesitan = Math.min(30, p.necesitan+1); save(); return;
+    case "necMenos": p.necesitan = Math.max(Math.max(1, sumados(p.id)), p.necesitan-1); save(); return;
+    case "toggle": p.estado = p.estado === "cerrado" ? "abierto" : "cerrado"; save(); return toast(p.estado==="cerrado" ? "Convocatoria cerrada: ya nadie más puede sumarse." : "Convocatoria reabierta.");
+    case "quitar": { const i = DB.inscritos.find(x => x.id === b.dataset.i); if (!i) return; if (!confirmar("q"+i.id, `Toca "Quitar" otra vez para sacar a ${usuario(i.uid).nombre}.`)) return; DB.inscritos = DB.inscritos.filter(x => x.id !== i.id); save(); return toast("Jugador quitado del partido."); }
+    case "borrar": if (!confirmar("p"+p.id, "Toca \"Eliminar\" otra vez para confirmar.")) return; DB.partidos = DB.partidos.filter(x => x.id !== p.id); DB.inscritos = DB.inscritos.filter(i => i.pid !== p.id); save(); return toast("Partido eliminado.");
+    case "addCancha": setAddMode(!UI.addMode); renderPanel(); if (UI.addMode) toast("Ahora haz clic en el mapa."); return;
+    case "borrarCancha": { const c = cancha(b.dataset.c); if (!confirmar("c"+c.id, `Toca otra vez para eliminar "${c.nombre}" y sus partidos.`)) return;
+      const pids = DB.partidos.filter(x => x.canchaId === c.id).map(x => x.id);
+      DB.canchas = DB.canchas.filter(x => x.id !== c.id); DB.partidos = DB.partidos.filter(x => x.canchaId !== c.id); DB.inscritos = DB.inscritos.filter(i => !pids.includes(i.pid));
+      UI.sel = null; save(); return toast("Cancha eliminada."); }
+    case "bloquear": { const u = usuario(b.dataset.u); u.bloqueado = !u.bloqueado; save(); return toast(u.bloqueado ? `${u.nombre} fue suspendido.` : `${u.nombre} fue reactivado.`); }
+    case "reset": if (!confirmar("reset", "Toca otra vez para restablecer todos los datos.")) return; DB = seed(); UI.sel = null; save(); return toast("Datos de ejemplo restablecidos.");
+  }
+});
+
+/* ---------- modales ---------- */
+function abrir(id){ $("#"+id).classList.add("on"); }
+function cerrar(id){ $("#"+id).classList.remove("on"); }
+document.querySelectorAll(".modal-bg").forEach(m => {
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) m.classList.remove("on"); });
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".modal-bg.on").forEach(m => m.classList.remove("on")); });
+
+function totalHint(){ const s = num($("#fpSomos").value,0,40,0), n = num($("#fpNec").value,0,40,0); $("#fpTotal").textContent = `Total en cancha: ${s+n}${s+n===10?" (fútbol 5)":s+n===14?" (fútbol 7)":s+n===22?" (fútbol 11)":""}.`; }
+$("#fpSomos").oninput = $("#fpNec").oninput = totalHint;
+function abrirPartido(cid){
+  if (yo().bloqueado) return toast("Tu cuenta está suspendida.");
+  $("#fpCancha").innerHTML = DB.canchas.slice().sort((a,b)=>distKm(a)-distKm(b)).map(c => `<option value="${c.id}">${esc(c.nombre)} (${distKm(c).toFixed(1)} km)</option>`).join("");
+  if (cid || UI.sel) $("#fpCancha").value = cid || UI.sel;
+  const ult = DB.partidos.filter(p => p.creador === yo().id).pop();
+  $("#fpEquipo").value = ult ? ult.equipo : "";
+  $("#fpFecha").value = hoy(); $("#fpFecha").min = hoy();
+  totalHint(); abrir("mPartido"); setTimeout(() => $("#fpEquipo").focus(), 50);
+}
+$("#fPartido").onsubmit = e => {
+  e.preventDefault();
+  const p = { id:uid("p"), canchaId:$("#fpCancha").value, creador:yo().id, equipo:$("#fpEquipo").value.trim().slice(0,40) || "Partido",
+    fecha:$("#fpFecha").value, hora:$("#fpHora").value, somos:num($("#fpSomos").value,1,30,1), necesitan:num($("#fpNec").value,1,30,1),
+    nota:$("#fpNota").value.trim().slice(0,160), estado:"abierto" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.fecha) || !/^\d{2}:\d{2}$/.test(p.hora)) return toast("Revisa fecha y hora.");
+  if (cuando(p) < Date.now() - 5*60*1000) return toast("Esa hora ya pasó.");
+  DB.partidos.push(p); cerrar("mPartido"); $("#fpNota").value = "";
+  UI.tab = "mios"; UI.sel = null; save(); panTo(cancha(p.canchaId)); abrirPopup(cancha(p.canchaId));
+  toast("¡Partido publicado! Ya aparece en el mapa para los jugadores cercanos.");
+};
+$("#fCancha").onsubmit = e => {
+  e.preventDefault(); if (!UI.newLatLng) return;
+  const c = { id:uid("c"), nombre:$("#fcNombre").value.trim().slice(0,50), tipo:$("#fcTipo").value, precio:$("#fcPrecio").value.trim().slice(0,30) || "—", dir:$("#fcDir").value.trim().slice(0,80), ...UI.newLatLng };
+  DB.canchas.push(c); cerrar("mCancha"); UI.newLatLng = null; save(); seleccionar(c.id);
+  toast("Cancha agregada al mapa.");
+};
+
+/* ---------- inicio ---------- */
+history.replaceState(null, "", "#"+UI.vista);
+renderAll();
+cargarMapa();
+</script>
+</body>
+</html>

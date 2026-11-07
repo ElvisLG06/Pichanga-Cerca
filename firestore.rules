@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Reglas de seguridad de Pichanga Cerca.
+// Pégalas en Firebase → Firestore Database → Reglas → Publicar
+// (o se suben solas con `firebase deploy`).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+
+    // ⚠️ Pon aquí los mismos correos que en public/config.js (adminEmails), en minúsculas.
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in ['elvislg06@gmail.com'];
+    }
+
+    function perfil(uid) { return /databases/$(database)/documents/usuarios/$(uid); }
+    function notBlocked() {
+      return !exists(perfil(request.auth.uid))
+        || get(perfil(request.auth.uid)).data.get('bloqueado', false) != true;
+    }
+    function intEntre(v, a, b) { return v is int && v >= a && v <= b; }
+    function textoMax(v, n) { return v is string && v.size() <= n; }
+
+    // ---------- canchas: todos leen, solo admin escribe ----------
+    match /canchas/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && textoMax(request.resource.data.nombre, 50)
+        && request.resource.data.lat is number && request.resource.data.lng is number;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- usuarios: perfil público (nombre y foto) ----------
+    match /usuarios/{uid} {
+      allow read: if signedIn();
+      // cada uno crea/actualiza su perfil, pero NO puede tocar "bloqueado"
+      allow create: if signedIn() && request.auth.uid == uid
+        && !('bloqueado' in request.resource.data);
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['bloqueado']));
+      allow delete: if isAdmin();
+    }
+
+    // ---------- partidos: todos leen; usuarios activos crean; dueño o admin editan ----------
+    match /partidos/{id} {
+      allow read: if true;
+      allow create: if signedIn() && notBlocked()
+        && request.resource.data.creador == request.auth.uid
+        && intEntre(request.resource.data.somos, 1, 30)
+        && intEntre(request.resource.data.necesitan, 1, 30)
+        && textoMax(request.resource.data.equipo, 40)
+        && textoMax(request.resource.data.nota, 160)
+        && request.resource.data.estado == 'abierto'
+        && exists(/databases/$(database)/documents/canchas/$(request.resource.data.canchaId));
+      allow update: if isAdmin() || (signedIn()
+        && resource.data.creador == request.auth.uid
+        && request.resource.data.creador == resource.data.creador
+        && intEntre(request.resource.data.necesitan, 1, 30)
+        && request.resource.data.estado in ['abierto', 'cerrado']);
+      allow delete: if isAdmin() || (signedIn() && resource.data.creador == request.auth.uid);
+    }
+
+    // ---------- inscritos: id = "<partidoId>_<uid>" ----------
+    match /inscritos/{id} {
+      allow read: if signedIn();
+      // cada jugador solo se inscribe a sí mismo
+      allow create, update: if signedIn() && notBlocked()
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.pid + '_' + request.auth.uid
+        && intEntre(request.resource.data.cantidad, 1, 30)
+        && get(/databases/$(database)/documents/partidos/$(request.resource.data.pid)).data.estado == 'abierto';
+      // borra: el propio jugador, el organizador del partido o un admin
+      allow delete: if signedIn() && (
+        resource.data.uid == request.auth.uid
+        || isAdmin()
+        || (exists(/databases/$(database)/documents/partidos/$(resource.data.pid))
+            && get(/databases/$(database)/documents/partidos/$(resource.data.pid)).data.creador == request.auth.uid));
+    }
+  }
+}

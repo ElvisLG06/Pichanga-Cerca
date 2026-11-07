@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pichanga Cerca</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pitch:#0d4d2e; --pitch-2:#136b40; --lime:#c6f432; --ink:#132018; --muted:#5d6b62;
+    --line:#e3e7e1; --bg:#f5f6f2; --card:#ffffff; --orange:#f08a24; --red:#d64541; --blue:#2f7bf6;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px}
+  button{font:inherit;cursor:pointer}
+  .app{display:grid;grid-template-columns:1fr 420px;grid-template-rows:auto 1fr;height:100vh}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:12px 18px;background:var(--pitch);color:#fff;
+    background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 60px,transparent 60px 120px)}
+  .logo{display:flex;align-items:center;gap:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;letter-spacing:.5px;text-transform:uppercase}
+  .logo b{color:var(--lime)}
+  .loc{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;opacity:.9}
+  .loc .dot{width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(47,123,246,.35)}
+  .btn-cta{background:var(--lime);color:var(--pitch);border:0;border-radius:999px;padding:9px 16px;font-weight:700}
+  .btn-cta:hover{filter:brightness(1.05)}
+
+  .mapwrap{position:relative;overflow:hidden;background:#e9ebe4}
+  svg#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none}
+  svg#map.drag{cursor:grabbing}
+  .pin{cursor:pointer}
+  .pin .lbl{font:600 11px Inter,sans-serif;fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+  .pin.sel .head{stroke:var(--lime);stroke-width:4}
+  .zoom{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;gap:6px}
+  .zoom button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:18px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  .legend{position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.95);border-radius:12px;padding:10px 12px;display:flex;gap:14px;font-size:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .note{position:absolute;left:14px;top:14px;background:rgba(19,32,24,.82);color:#fff;font-size:11.5px;padding:7px 10px;border-radius:9px;max-width:320px;line-height:1.4}
+
+  aside{background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .tabs{display:flex;gap:6px;padding:12px 14px 0}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .chip.on{background:var(--pitch);border-color:var(--pitch);color:#fff}
+  .scroll{overflow:auto;padding:12px 14px 24px;flex:1}
+  h2{font-family:'Barlow Condensed',sans-serif;font-size:24px;margin:4px 0 2px;text-transform:uppercase;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .tag{background:#eef5e4;color:var(--pitch);border-radius:6px;padding:2px 7px;font-weight:600;font-size:11.5px}
+  .back{background:none;border:0;color:var(--pitch-2);font-weight:600;padding:0;margin-bottom:6px}
+  .match{border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px;background:#fff;transition:box-shadow .15s}
+  .match:hover{box-shadow:0 3px 14px rgba(0,0,0,.06)}
+  .mtop{display:flex;align-items:flex-start;gap:12px}
+  .time{background:var(--pitch);color:#fff;border-radius:10px;padding:6px 9px;text-align:center;min-width:64px}
+  .time .h{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;line-height:1}
+  .time .d{font-size:10.5px;opacity:.85;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+  .mt{font-weight:700;font-size:14.5px}
+  .mm{color:var(--muted);font-size:12px;margin-top:2px}
+  .faltan{margin-left:auto;text-align:right}
+  .faltan .n{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:800;line-height:.9;color:var(--pitch-2)}
+  .faltan .n.full{color:var(--red);font-size:18px}
+  .faltan small{display:block;color:var(--muted);font-size:11px}
+  .bar{height:7px;background:#edf0ea;border-radius:9px;margin:10px 0 6px;overflow:hidden;display:flex}
+  .bar .a{background:var(--pitch)} .bar .b{background:var(--lime)}
+  .stats{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .who{font-size:12px;color:var(--muted);margin-top:6px}
+  .actions{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .step{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .step button{width:32px;height:34px;border:0;background:#f4f6f2;font-size:16px;font-weight:700}
+  .step span{min-width:34px;text-align:center;font-weight:700}
+  .btn{border:0;border-radius:10px;padding:9px 14px;font-weight:700;background:var(--pitch);color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:#fff;color:var(--red);border:1px solid #f1c9c8}
+  .going{background:#f2fbe0;border:1px solid #d9efa8;color:var(--pitch);border-radius:10px;padding:8px 10px;font-weight:600;font-size:12.5px;flex:1}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px}
+  .empty .big{font-size:38px}
+  .row-cancha{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;background:#fff}
+  .row-cancha:hover{border-color:#cdd6c9}
+  .badge{min-width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+  .sec{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-size:14px;margin:14px 0 8px;font-weight:700}
+  .status{font-size:11.5px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--line);background:#fafbf8}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(10,20,14,.5);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+  .modal-bg.on{display:flex}
+  .modal{background:#fff;border-radius:18px;width:100%;max-width:420px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
+  .modal h3{font-family:'Barlow Condensed',sans-serif;font-size:26px;text-transform:uppercase;margin:0 0 12px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:60px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;opacity:0;transition:.25s;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 48vh 1fr;height:auto;min-height:100vh}
+    aside{border-left:0;border-top:1px solid var(--line)}
+    .loc span.t{display:none}
+    .note{display:none}
+    .logo{font-size:22px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#fff"/><path d="M16 9l5 3.6-1.9 5.9h-6.2L11 12.6z" fill="#132018"/><path d="M16 2v7M21 12.6l6.5-2.3M19.1 18.5l4 5.6M12.9 18.5l-4 5.6M11 12.6l-6.5-2.3" stroke="#132018" stroke-width="1.6"/></svg>
+      Pichanga <b>Cerca</b>
+    </div>
+    <div class="loc"><i class="dot"></i><span class="t">Tu ubicación · radio 3 km</span></div>
+    <button class="btn-cta" id="btnNuevo">+ Publicar partido</button>
+  </header>
+
+  <div class="mapwrap">
+    <svg id="map" viewBox="0 0 1000 700" aria-label="Mapa de canchas y lozas cercanas"></svg>
+    <div class="note">Mapa ilustrativo del prototipo. En la versión final aquí va Google Maps con tu ubicación GPS real.</div>
+    <div class="zoom"><button id="zin" aria-label="Acercar">+</button><button id="zout" aria-label="Alejar">−</button><button id="zme" aria-label="Centrar en mí" title="Centrar en mí">◎</button></div>
+    <div class="legend">
+      <span><i style="background:var(--pitch-2)"></i>Buscan jugadores</span>
+      <span><i style="background:var(--orange)"></i>Completo</span>
+      <span><i style="background:#9aa39c"></i>Sin partidos</span>
+    </div>
+  </div>
+
+  <aside>
+    <div class="tabs" id="filtros"></div>
+    <div class="scroll" id="panel"></div>
+    <div class="status" id="status">Conectando…</div>
+  </aside>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <form class="modal" id="form">
+    <h3>Publicar partido</h3>
+    <label for="fCancha">Cancha o loza</label>
+    <select id="fCancha" required></select>
+    <label for="fEquipo">Nombre del grupo</label>
+    <input id="fEquipo" maxlength="40" placeholder="Ej: Los del barrio" required>
+    <div class="grid2">
+      <div><label for="fFecha">Fecha</label><input id="fFecha" type="date" required></div>
+      <div><label for="fHora">Hora</label><input id="fHora" type="time" required value="19:00"></div>
+    </div>
+    <div class="grid2">
+      <div><label for="fSomos">¿Cuántos son?</label><input id="fSomos" type="number" min="1" max="30" value="7" required></div>
+      <div><label for="fNec">¿Cuántos necesitan?</label><input id="fNec" type="number" min="1" max="30" value="3" required></div>
+    </div>
+    <div class="hint" id="fTotal"></div>
+    <label for="fNota">Nota (opcional)</label>
+    <textarea id="fNota" maxlength="160" placeholder="Ej: Fútbol 5, se paga S/ 10 c/u. Traer polo oscuro."></textarea>
+    <div class="mfoot">
+      <button type="button" class="btn ghost" id="fCancel">Cancelar</button>
+      <button type="submit" class="btn">Publicar</button>
+    </div>
+  </form>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Datos fijos: canchas y lozas de la zona ----------
+const CANCHAS = [
+  {id:"c1", nombre:"Loza Parque Los Olivos", tipo:"Loza", precio:"Gratis", dir:"Parque Los Olivos, cuadra 3", x:385, y:255},
+  {id:"c2", nombre:"Sintética El Golazo", tipo:"Sintética", precio:"S/ 80 la hora", dir:"Av. Los Deportes 1240", x:625, y:205},
+  {id:"c3", nombre:"Loza Vecinal San Martín", tipo:"Loza", precio:"Gratis", dir:"Jr. San Martín 410", x:245, y:470},
+  {id:"c4", nombre:"Complejo La Bombonera", tipo:"Sintética", precio:"S/ 90 la hora", dir:"Av. Principal 2150", x:770, y:430},
+  {id:"c5", nombre:"Loza Parque Central", tipo:"Loza", precio:"Gratis", dir:"Parque Central s/n", x:540, y:395},
+  {id:"c6", nombre:"Sintética Tiki Taka", tipo:"Sintética", precio:"S/ 70 la hora", dir:"Calle Las Gardenias 88", x:165, y:175},
+  {id:"c7", nombre:"Loza Colegio Santa Rosa", tipo:"Loza", precio:"S/ 20 la hora", dir:"Jr. Santa Rosa 560", x:690, y:600},
+  {id:"c8", nombre:"Cancha El Potrero", tipo:"Tierra", precio:"Gratis", dir:"Psje. El Potrero, al costado del mercado", x:420, y:615},
+];
+const ME = {x:500, y:350};
+const KM_PER_UNIT = 3/1000;
+
+// ---------- Estado ----------
+const S = {
+  db:null, user:null, uid:null, canWrite:true, mode:"cargando",
+  partidos:[], inscritos:[], names:{}, pendingNames:new Set(),
+  sel:null, filtro:"todos", cant:{}, busy:false,
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = (v, lo, hi, d) => { v = Math.round(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+
+// ---------- Fechas ----------
+const isoDate = d => d.toLocaleDateString("en-CA");
+const hoy = () => isoDate(new Date());
+const manana = () => { const d = new Date(); d.setDate(d.getDate()+1); return isoDate(d); };
+function diaLabel(f){
+  if (f === hoy()) return "Hoy";
+  if (f === manana()) return "Mañana";
+  const [y,m,d] = f.split("-").map(Number);
+  return new Date(y, m-1, d).toLocaleDateString("es-PE", {weekday:"short", day:"numeric", month:"short"});
+}
+function cuando(p){ const [y,m,d] = p.fecha.split("-").map(Number); const [h,mi] = p.hora.split(":").map(Number); return new Date(y,m-1,d,h,mi).getTime(); }
+
+// ---------- Cálculos ----------
+const cancha = id => CANCHAS.find(c => c.id === id);
+const distKm = c => Math.hypot(c.x-ME.x, c.y-ME.y) * KM_PER_UNIT;
+const inscritosDe = pid => S.inscritos.filter(i => i.pid === pid);
+const sumados = pid => inscritosDe(pid).reduce((a,i) => a + i.cantidad, 0);
+const faltan = p => Math.max(0, p.necesitan - sumados(p.id));
+const miInscripcion = pid => S.inscritos.find(i => i.pid === pid && i.uid === S.uid);
+function visibles(){
+  const now = Date.now(), h = hoy(), m = manana();
+  const lim = new Date(); lim.setDate(lim.getDate()+7);
+  return S.partidos
+    .filter(p => cancha(p.canchaId) && cuando(p) > now - 60*60*1000)
+    .filter(p => S.filtro === "hoy" ? p.fecha === h : S.filtro === "manana" ? p.fecha === m : S.filtro === "semana" ? cuando(p) <= lim.getTime() : true)
+    .sort((a,b) => cuando(a) - cuando(b));
+}
+
+function limpiarPartido(id, d){
+  if (!d || typeof d !== "object") return null;
+  if (typeof d.fecha !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) return null;
+  if (typeof d.hora !== "string" || !/^\d{2}:\d{2}$/.test(d.hora)) return null;
+  return { id, canchaId:String(d.canchaId||""), fecha:d.fecha, hora:d.hora,
+    somos:num(d.somos,0,40,0), necesitan:num(d.necesitan,1,40,1),
+    equipo:String(d.equipo||"Partido").slice(0,40), nota:String(d.nota||"").slice(0,160),
+    creador:String(d.creador||"") };
+}
+function limpiarInscrito(id, d){
+  if (!d || typeof d !== "object" || !d.pid || !d.uid) return null;
+  return { id, pid:String(d.pid), uid:String(d.uid), cantidad:num(d.cantidad,1,30,1) };
+}
+
+// ---------- Nombres de usuarios ----------
+function nombre(uid){
+  if (uid === S.uid) return "Tú";
+  if (S.names[uid]) return S.names[uid];
+  if (S.user && uid && !S.pendingNames.has(uid)) {
+    S.pendingNames.add(uid);
+    queueMicrotask(cargarNombres);
+  }
+  return "Alguien";
+}
+let nameTimer = null;
+function cargarNombres(){
+  if (nameTimer) return;
+  nameTimer = setTimeout(async () => {
+    nameTimer = null;
+    const ids = [...S.pendingNames].filter(id => !(id in S.names));
+    if (!ids.length || !S.user) return;
+    try {
+      const ps = await S.user.profiles(ids);
+      ids.forEach(id => { S.names[id] = (ps && ps[id] && ps[id].name) || "Alguien"; });
+      render();
+    } catch(e) { ids.forEach(id => S.names[id] = "Alguien"); }
+  }, 60);
+}
+
+// ---------- Mapa ----------
+const VB = {x:0, y:0, w:1000, h:700};
+const svg = $("#map");
+function setVB(){ svg.setAttribute("viewBox", `${VB.x} ${VB.y} ${VB.w} ${VB.h}`); }
+function dibujarBase(){
+  let s = `<defs>
+    <pattern id="grass" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#cfe6bf"/><circle cx="2" cy="2" r=".8" fill="#bcd9a9"/></pattern>
+    <filter id="sh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".25"/></filter>
+    <radialGradient id="me"><stop offset="0" stop-color="#2f7bf6" stop-opacity=".18"/><stop offset="1" stop-color="#2f7bf6" stop-opacity=".04"/></radialGradient>
+  </defs>`;
+  s += `<rect x="-600" y="-600" width="2200" height="1900" fill="#ffffff"/>`;
+  const parks = new Set(["5-5","5-6","2-3","8-4","3-7","9-2","1-1","6-9","10-6","7-1"]);
+  for (let i=-6;i<20;i++) for (let j=-6;j<16;j++){
+    const x = i*74+8, y = j*66+8;
+    const k = `${i}-${j}`;
+    const fill = parks.has(k) ? "url(#grass)" : ((i*7+j*3)%5===0 ? "#e6e4dc" : "#ecebe5");
+    s += `<rect x="${x}" y="${y}" width="62" height="54" rx="5" fill="${fill}"/>`;
+  }
+  // río y avenidas
+  s += `<path d="M-600 840 C 100 760, 400 900, 1600 720" stroke="#bcd7ef" stroke-width="46" fill="none"/>`;
+  s += `<path d="M-600 330 L1600 330" stroke="#f7dd8a" stroke-width="16"/>`;
+  s += `<path d="M-200 900 L1300 -150" stroke="#f7dd8a" stroke-width="14"/>`;
+  s += `<path d="M590 -600 L590 1300" stroke="#fff" stroke-width="12"/>`;
+  s += `<text x="40" y="324" font-family="Inter" font-size="12" font-weight="600" fill="#9a8540">AV. PRINCIPAL</text>`;
+  s += `<text transform="translate(840 150) rotate(-35)" font-family="Inter" font-size="12" font-weight="600" fill="#9a8540">AV. LOS DEPORTES</text>`;
+  s += `<text x="80" y="818" font-family="Inter" font-size="12" font-style="italic" fill="#6f95b8">Río</text>`;
+  // yo
+  s += `<circle cx="${ME.x}" cy="${ME.y}" r="333" fill="url(#me)" stroke="#2f7bf6" stroke-opacity=".25" stroke-dasharray="6 6"/>`;
+  s += `<circle cx="${ME.x}" cy="${ME.y}" r="14" fill="#2f7bf6" opacity=".25"><animate attributeName="r" values="10;22;10" dur="2.4s" repeatCount="indefinite"/></circle>`;
+  s += `<circle cx="${ME.x}" cy="${ME.y}" r="8" fill="#2f7bf6" stroke="#fff" stroke-width="3"/>`;
+  s += `<g id="pins"></g>`;
+  svg.innerHTML = s;
+}
+function estadoCancha(c){
+  const ps = visibles().filter(p => p.canchaId === c.id);
+  const abiertos = ps.filter(p => faltan(p) > 0);
+  return {ps, abiertos, color: abiertos.length ? "#136b40" : ps.length ? "#f08a24" : "#9aa39c"};
+}
+function dibujarPins(){
+  const g = svg.querySelector("#pins");
+  const z = VB.w/1000;
+  g.innerHTML = CANCHAS.map(c => {
+    const {abiertos, color} = estadoCancha(c);
+    const sel = S.sel === c.id;
+    const sc = (sel ? 1.25 : 1) * Math.max(.6, Math.min(1.2, z));
+    const fal = abiertos.reduce((a,p) => a + faltan(p), 0);
+    return `<g class="pin${sel?" sel":""}" data-id="${c.id}" transform="translate(${c.x} ${c.y}) scale(${sc})">
+      <path class="head" filter="url(#sh)" d="M0 0 C -6 -10 -18 -18 -18 -30 A18 18 0 1 1 18 -30 C 18 -18 6 -10 0 0Z" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+      <rect x="-9" y="-37" width="18" height="13" rx="1.5" fill="none" stroke="#fff" stroke-width="1.6"/>
+      <line x1="0" y1="-37" x2="0" y2="-24" stroke="#fff" stroke-width="1.4"/><circle cx="0" cy="-30.5" r="2.6" fill="none" stroke="#fff" stroke-width="1.3"/>
+      ${fal ? `<g transform="translate(15 -46)"><circle r="10" fill="#c6f432" stroke="#0d4d2e" stroke-width="2"/><text text-anchor="middle" y="4" font-family="Inter" font-weight="800" font-size="11" fill="#0d4d2e">${fal}</text></g>` : ""}
+      <text class="lbl" y="16" text-anchor="middle">${esc(c.nombre)}</text>
+    </g>`;
+  }).join("");
+}
+// pan & zoom
+let drag = null;
+function svgPt(ev){ const r = svg.getBoundingClientRect(); const s = Math.max(VB.w/r.width, VB.h/r.height); const ox=(r.width*s-VB.w)/2, oy=(r.height*s-VB.h)/2; return {x: VB.x + (ev.clientX-r.left)*s - ox, y: VB.y + (ev.clientY-r.top)*s - oy, s}; }
+function zoomAt(f, cx, cy){
+  const nw = Math.min(1800, Math.max(300, VB.w*f)); const k = nw/VB.w;
+  VB.x = cx - (cx-VB.x)*k; VB.y = cy - (cy-VB.y)*k; VB.w = nw; VB.h = nw*0.7;
+  clampVB(); setVB(); dibujarPins();
+}
+function clampVB(){ VB.x = Math.min(1300-VB.w, Math.max(-300, VB.x)); VB.y = Math.min(1000-VB.h, Math.max(-300, VB.y)); }
+svg.addEventListener("wheel", e => { e.preventDefault(); const p = svgPt(e); zoomAt(e.deltaY>0?1.12:1/1.12, p.x, p.y); }, {passive:false});
+svg.addEventListener("pointerdown", e => { drag = {sx:e.clientX, sy:e.clientY, vx:VB.x, vy:VB.y, moved:false, id:e.pointerId, target:e.target}; });
+svg.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX-drag.sx, dy = e.clientY-drag.sy;
+  if (!drag.moved && Math.hypot(dx,dy) > 5){ drag.moved = true; svg.classList.add("drag"); try{svg.setPointerCapture(drag.id)}catch(_){} }
+  if (drag.moved){ const s = svgPt(e).s; VB.x = drag.vx - dx*s; VB.y = drag.vy - dy*s; clampVB(); setVB(); }
+});
+svg.addEventListener("pointerup", e => {
+  if (drag && !drag.moved){ const pin = drag.target.closest && drag.target.closest(".pin"); if (pin) seleccionar(pin.dataset.id); }
+  drag = null; svg.classList.remove("drag");
+});
+svg.addEventListener("pointercancel", () => { drag = null; svg.classList.remove("drag"); });
+$("#zin").onclick = () => zoomAt(1/1.3, VB.x+VB.w/2, VB.y+VB.h/2);
+$("#zout").onclick = () => zoomAt(1.3, VB.x+VB.w/2, VB.y+VB.h/2);
+$("#zme").onclick = () => { VB.w=1000; VB.h=700; VB.x=ME.x-500; VB.y=ME.y-350; clampVB(); setVB(); dibujarPins(); };
+function centrar(c){ VB.x = c.x - VB.w/2; VB.y = c.y - VB.h/2; clampVB(); setVB(); }
+
+function seleccionar(id){ S.sel = id; if (id) centrar(cancha(id)); render(); $("#panel").scrollTop = 0; }
+
+// ---------- Panel ----------
+const FILTROS = [["todos","Todos"],["hoy","Hoy"],["manana","Mañana"],["semana","Esta semana"]];
+function renderFiltros(){
+  $("#filtros").innerHTML = FILTROS.map(([k,l]) => `<button class="chip${S.filtro===k?" on":""}" data-f="${k}">${l}</button>`).join("");
+}
+$("#filtros").onclick = e => { const b = e.target.closest("[data-f]"); if (b){ S.filtro = b.dataset.f; render(); } };
+
+function tarjeta(p, conCancha){
+  const c = cancha(p.canchaId), f = faltan(p), sum = sumados(p.id), total = p.somos + p.necesitan;
+  const mia = miInscripcion(p.id);
+  const maxCant = f + (mia ? mia.cantidad : 0);
+  const cant = Math.min(Math.max(1, S.cant[p.id] || (mia ? mia.cantidad : 1)), Math.max(1, maxCant));
+  const ins = inscritosDe(p.id);
+  const quien = ins.length ? "Se sumaron: " + ins.map(i => esc(nombre(i.uid)) + (i.cantidad>1 ? ` +${i.cantidad-1}` : "")).join(", ") : "Aún nadie se ha sumado. ¡Sé el primero!";
+  const soyCreador = p.creador && p.creador === S.uid;
+  const puede = S.canWrite && S.mode !== "solo-lectura";
+  let acciones;
+  if (mia){
+    acciones = `<div class="going">✓ Vas${mia.cantidad>1 ? ` con ${mia.cantidad-1} más` : ""}</div>
+      <div class="step"><button data-a="menos" data-p="${p.id}">−</button><span>${cant}</span><button data-a="mas" data-p="${p.id}" ${cant>=maxCant?"disabled":""}>+</button></div>
+      ${cant!==mia.cantidad ? `<button class="btn" data-a="unirse" data-p="${p.id}" ${!puede||S.busy?"disabled":""}>Guardar</button>` : ""}
+      <button class="btn danger" data-a="salir" data-p="${p.id}" ${!puede||S.busy?"disabled":""}>Ya no voy</button>`;
+  } else if (f > 0){
+    acciones = `<div class="step" title="¿Cuántos van contigo incluido?"><button data-a="menos" data-p="${p.id}">−</button><span>${cant}</span><button data-a="mas" data-p="${p.id}" ${cant>=f?"disabled":""}>+</button></div>
+      <button class="btn" data-a="unirse" data-p="${p.id}" ${!puede||S.busy?"disabled":""}>${cant>1 ? `Nos sumamos (${cant})` : "Me sumo"}</button>`;
+  } else {
+    acciones = `<div class="going" style="background:#fff3e6;border-color:#f6d2ad;color:#a85a12">Equipo completo</div>`;
+  }
+  if (soyCreador) acciones += `<button class="btn ghost" data-a="borrar" data-p="${p.id}" ${S.busy?"disabled":""} title="Eliminar partido">🗑</button>`;
+  return `<div class="match">
+    <div class="mtop">
+      <div class="time"><div class="h">${esc(p.hora)}</div><div class="d">${esc(diaLabel(p.fecha))}</div></div>
+      <div style="min-width:0">
+        <div class="mt">${esc(p.equipo)}</div>
+        <div class="mm">${conCancha ? `📍 ${esc(c.nombre)} · ${distKm(c).toFixed(1)} km` : `Organiza: ${esc(p.creador ? nombre(p.creador) : p.equipo)}`}</div>
+        ${p.nota ? `<div class="mm" style="margin-top:4px">“${esc(p.nota)}”</div>` : ""}
+      </div>
+      <div class="faltan">${f>0 ? `<div class="n">${f}</div><small>faltan</small>` : `<div class="n full">Lleno</div>`}</div>
+    </div>
+    <div class="bar"><div class="a" style="width:${p.somos/total*100}%"></div><div class="b" style="width:${Math.min(sum,p.necesitan)/total*100}%"></div></div>
+    <div class="stats"><span>Son ${p.somos} · buscan ${p.necesitan}</span><span>${Math.min(sum,p.necesitan)}/${p.necesitan} se sumaron</span></div>
+    <div class="who">${quien}</div>
+    <div class="actions">${acciones}</div>
+  </div>`;
+}
+
+function renderPanel(){
+  const el = $("#panel");
+  if (S.sel){
+    const c = cancha(S.sel);
+    const ps = visibles().filter(p => p.canchaId === c.id);
+    el.innerHTML = `<button class="back" data-a="volver">← Todas las canchas</button>
+      <h2>${esc(c.nombre)}</h2>
+      <div class="sub"><span class="tag">${esc(c.tipo)}</span><span>${esc(c.precio)}</span><span>·</span><span>${distKm(c).toFixed(1)} km de ti</span></div>
+      <div class="sub" style="margin-top:-4px">📍 ${esc(c.dir)}</div>
+      <div class="sec">Partidos por horario</div>
+      ${ps.length ? ps.map(p => tarjeta(p,false)).join("") : `<div class="empty"><div class="big">⚽</div>No hay partidos publicados aquí ${S.filtro==="hoy"?"hoy":S.filtro==="manana"?"mañana":"por ahora"}.</div>`}
+      <button class="btn" style="width:100%;margin-top:6px" data-a="nuevo" data-c="${c.id}">+ Publicar partido en esta cancha</button>`;
+    return;
+  }
+  const abiertos = visibles().filter(p => faltan(p) > 0)
+    .sort((a,b) => (cuando(a)-cuando(b)) || (distKm(cancha(a.canchaId)) - distKm(cancha(b.canchaId))));
+  const porCancha = CANCHAS.map(c => ({c, ...estadoCancha(c)})).sort((a,b) => distKm(a.c)-distKm(b.c));
+  el.innerHTML = `<h2>Partidos cerca de ti</h2>
+    <div class="sub">Equipos que buscan jugadores en un radio de 3 km. Toca una cancha en el mapa para ver sus horarios.</div>
+    ${abiertos.length ? abiertos.map(p => tarjeta(p,true)).join("") : `<div class="empty"><div class="big">🥅</div>${S.mode==="cargando" ? "Cargando partidos…" : "Nadie está buscando jugadores en este momento.<br>¿Por qué no publicas tu partido?"}</div>`}
+    <div class="sec">Canchas y lozas cercanas</div>
+    ${porCancha.map(({c,ps,abiertos,color}) => `<div class="row-cancha" data-a="ver" data-c="${c.id}">
+      <div class="badge" style="background:${color}">${ps.length}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.nombre)}</div><div class="mm">${esc(c.tipo)} · ${distKm(c).toFixed(1)} km · ${abiertos.length ? `${abiertos.length} buscando jugadores` : ps.length ? "partidos completos" : "sin partidos"}</div></div>
+      <span style="color:var(--muted)">›</span></div>`).join("")}`;
+}
+
+function renderStatus(){
+  const m = {
+    "cargando":"Conectando con los partidos…",
+    "vivo":"● En vivo — los cambios de otros jugadores aparecen al instante.",
+    "demo":"Modo demo: los cambios se guardan solo en esta pestaña.",
+    "solo-lectura":"Solo lectura: inicia sesión o pide acceso de Colaborador para sumarte.",
+    "lento":"Los partidos tardan en cargar; lo que ves podría estar desactualizado.",
+  };
+  $("#status").textContent = m[S.mode] || "";
+}
+function render(){ renderFiltros(); dibujarPins(); renderPanel(); renderStatus(); }
+
+// ---------- Acciones ----------
+$("#panel").addEventListener("click", async e => {
+  const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
+  const a = b.dataset.a, pid = b.dataset.p;
+  if (a === "volver") return seleccionar(null);
+  if (a === "ver") return seleccionar(b.dataset.c);
+  if (a === "nuevo") return abrirForm(b.dataset.c);
+  const p = S.partidos.find(x => x.id === pid); if (!p) return;
+  const mia = miInscripcion(pid);
+  const maxCant = faltan(p) + (mia ? mia.cantidad : 0);
+  const cur = Math.min(Math.max(1, S.cant[pid] || (mia ? mia.cantidad : 1)), Math.max(1,maxCant));
+  if (a === "mas"){ S.cant[pid] = Math.min(maxCant, cur+1); return renderPanel(); }
+  if (a === "menos"){ S.cant[pid] = Math.max(1, cur-1); return renderPanel(); }
+  if (a === "unirse") return unirse(p, Math.min(cur, maxCant));
+  if (a === "salir") return salir(p);
+  if (a === "borrar") return borrar(p);
+});
+
+const safeId = s => String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(0, 120);
+async function conBusy(fn){
+  S.busy = true; renderPanel();
+  try { await fn(); }
+  catch(e){
+    if (e && e.code === "invalid_argument"){ S.canWrite = false; S.mode = "solo-lectura"; toast("No tienes permiso para escribir aquí. Pide al dueño acceso de Colaborador."); }
+    else if (e && e.code === "quota_exceeded") toast("Se llenó el espacio de partidos. Borra partidos antiguos.");
+    else toast("No se pudo guardar. Intenta de nuevo.");
+  }
+  finally { S.busy = false; render(); }
+}
+function unirse(p, cant){
+  if (cant < 1) return;
+  return conBusy(async () => {
+    const id = `${p.id}__${safeId(S.uid)}`;
+    const body = {pid:p.id, uid:S.uid, cantidad:cant, en:Date.now()};
+    if (S.db) await S.db.doc("inscritos/"+id).set(body);
+    else { S.inscritos = S.inscritos.filter(i => i.id !== id); S.inscritos.push({id, ...body}); }
+    delete S.cant[p.id];
+    toast(cant>1 ? `¡Listo! Te sumaste con ${cant-1} más. Faltan ${faltan(p)}.` : `¡Listo, te sumaste! Faltan ${faltan(p)}.`);
+  });
+}
+function salir(p){
+  return conBusy(async () => {
+    const mia = miInscripcion(p.id); if (!mia) return;
+    if (S.db) await S.db.doc("inscritos/"+mia.id).delete();
+    else S.inscritos = S.inscritos.filter(i => i.id !== mia.id);
+    delete S.cant[p.id];
+    toast("Saliste del partido.");
+  });
+}
+let confirmBorrar = null;
+function borrar(p){
+  if (confirmBorrar !== p.id){ confirmBorrar = p.id; toast("Toca 🗑 otra vez para eliminar el partido."); setTimeout(() => { if (confirmBorrar===p.id) confirmBorrar=null; }, 4000); return; }
+  confirmBorrar = null;
+  return conBusy(async () => {
+    const ins = inscritosDe(p.id);
+    if (S.db){
+      await S.db.doc("partidos/"+p.id).delete();
+      for (const i of ins) { try { await S.db.doc("inscritos/"+i.id).delete(); } catch(_){} }
+    } else {
+      S.partidos = S.partidos.filter(x => x.id !== p.id);
+      S.inscritos = S.inscritos.filter(i => i.pid !== p.id);
+    }
+    toast("Partido eliminado.");
+  });
+}
+
+// ---------- Formulario ----------
+const fCancha = $("#fCancha");
+fCancha.innerHTML = CANCHAS.slice().sort((a,b)=>distKm(a)-distKm(b)).map(c => `<option value="${c.id}">${esc(c.nombre)} (${distKm(c).toFixed(1)} km)</option>`).join("");
+function totalHint(){ const s = num($("#fSomos").value,0,40,0), n = num($("#fNec").value,0,40,0); $("#fTotal").textContent = `Total en cancha: ${s+n} jugadores${s+n===10?" (fútbol 5)":s+n===14?" (fútbol 7)":""}.`; }
+$("#fSomos").oninput = $("#fNec").oninput = totalHint;
+function abrirForm(cid){
+  if (!S.canWrite || S.mode === "solo-lectura"){ toast("Necesitas acceso de Colaborador para publicar."); return; }
+  if (cid) fCancha.value = cid; else if (S.sel) fCancha.value = S.sel;
+  $("#fFecha").value = hoy(); $("#fFecha").min = hoy();
+  totalHint();
+  $("#modalBg").classList.add("on");
+  setTimeout(() => $("#fEquipo").focus(), 50);
+}
+function cerrarForm(){ $("#modalBg").classList.remove("on"); }
+$("#btnNuevo").onclick = () => abrirForm();
+$("#fCancel").onclick = cerrarForm;
+$("#modalBg").addEventListener("click", e => { if (e.target.id === "modalBg") cerrarForm(); });
+$("#form").addEventListener("submit", e => {
+  e.preventDefault();
+  const body = {
+    canchaId: fCancha.value, equipo: $("#fEquipo").value.trim().slice(0,40) || "Partido",
+    fecha: $("#fFecha").value, hora: $("#fHora").value,
+    somos: num($("#fSomos").value,1,30,1), necesitan: num($("#fNec").value,1,30,1),
+    nota: $("#fNota").value.trim().slice(0,160), creador: S.uid || "", creadoEn: Date.now(),
+  };
+  const p0 = limpiarPartido("tmp", body);
+  if (!p0){ toast("Revisa la fecha y la hora."); return; }
+  if (cuando(p0) < Date.now() - 5*60*1000){ toast("Esa hora ya pasó."); return; }
+  cerrarForm();
+  conBusy(async () => {
+    if (S.db) await S.db.collection("partidos").add(body);
+    else S.partidos.push({...p0, id:"p"+Math.random().toString(36).slice(2,9)});
+    S.sel = body.canchaId; centrar(cancha(body.canchaId));
+    $("#form").reset(); $("#fHora").value = "19:00"; $("#fSomos").value = 7; $("#fNec").value = 3;
+    toast("¡Partido publicado! Ya aparece en el mapa.");
+  });
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarForm(); });
+
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3200); }
+
+// ---------- Modo demo (sin base de datos) ----------
+function demo(){
+  S.mode = "demo"; S.uid = "yo"; S.canWrite = true;
+  const h = hoy(), m = manana();
+  S.names = {d1:"Carlos", d2:"Lucía", d3:"Diego", d4:"Rosa"};
+  S.partidos = [
+    {id:"p1", canchaId:"c5", fecha:h, hora:"19:00", somos:7, necesitan:3, equipo:"Los del Parque", nota:"Fútbol 5, nivel tranqui.", creador:"d1"},
+    {id:"p2", canchaId:"c2", fecha:h, hora:"20:30", somos:10, necesitan:4, equipo:"Oficina FC", nota:"S/ 7 cada uno.", creador:"d2"},
+    {id:"p3", canchaId:"c1", fecha:h, hora:"18:00", somos:8, necesitan:2, equipo:"Pichanga Olivos", nota:"", creador:"d3"},
+    {id:"p4", canchaId:"c4", fecha:m, hora:"10:00", somos:9, necesitan:5, equipo:"Veteranos +35", nota:"Fútbol 7.", creador:"d4"},
+    {id:"p5", canchaId:"c3", fecha:m, hora:"17:00", somos:6, necesitan:4, equipo:"Barrio San Martín", nota:"Traer polo blanco.", creador:"d1"},
+    {id:"p6", canchaId:"c5", fecha:m, hora:"19:30", somos:8, necesitan:2, equipo:"Los del Parque", nota:"", creador:"d1"},
+  ].map(p => limpiarPartido(p.id, p));
+  S.inscritos = [
+    {id:"i1", pid:"p1", uid:"d2", cantidad:1},
+    {id:"i2", pid:"p2", uid:"d3", cantidad:2},
+    {id:"i3", pid:"p3", uid:"d4", cantidad:2},
+    {id:"i4", pid:"p4", uid:"d3", cantidad:1},
+  ];
+  render();
+}
+
+// ---------- Conexión a datos compartidos ----------
+async function iniciar(){
+  dibujarBase(); setVB(); render();
+  if (!window.claude || typeof window.claude.use !== "function"){ demo(); return; }
+  let db = null, user = null;
+  try { [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]); } catch(_){}
+  if (!db){ demo(); return; }
+  S.db = db; S.user = user;
+  try { S.uid = user ? await user.id() : null; } catch(_){ S.uid = null; }
+  if (!S.uid){ S.canWrite = false; }
+  try { if (user && user.can){ const w = await user.can("data.write"); if (w === false) S.canWrite = false; } } catch(_){}
+  S.mode = S.canWrite ? "cargando" : "solo-lectura";
+  render();
+
+  let okP = false, okI = false;
+  const timer = setTimeout(() => { if (!(okP && okI)){ S.mode = "lento"; renderStatus(); } }, 10000);
+  const listo = () => { if (okP && okI){ clearTimeout(timer); if (S.mode === "cargando" || S.mode === "lento") S.mode = S.canWrite ? "vivo" : "solo-lectura"; } };
+  const onErr = e => { clearTimeout(timer); S.mode = "lento"; render(); };
+
+  db.collection("partidos").onSnapshot(snap => {
+    S.partidos = snap.docs.map(d => limpiarPartido(d.id, d.data())).filter(Boolean);
+    if (!snap.metadata.fromCache){ okP = true; listo(); }
+    render();
+  }, onErr);
+  db.collection("inscritos").onSnapshot(snap => {
+    S.inscritos = snap.docs.map(d => limpiarInscrito(d.id, d.data())).filter(Boolean);
+    if (!snap.metadata.fromCache){ okI = true; listo(); }
+    render();
+  }, onErr);
+}
+iniciar();
+</script>
+</body>
+</html>

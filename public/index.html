@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d4d2e">
+<title>Pichanga Cerca — encuentra tu partido</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#fff"/><path d="M16 9l5 3.6-1.9 5.9h-6.2L11 12.6z" fill="#132018"/><path d="M16 2v7M21 12.6l6.5-2.3M19.1 18.5l4 5.6M12.9 18.5l-4 5.6M11 12.6l-6.5-2.3" stroke="#132018" stroke-width="1.6"/></svg>
+      Pichanga <b>Cerca</b>
+    </div>
+    <nav class="modes" id="modes"></nav>
+    <div class="account" id="account"></div>
+  </header>
+  <div class="mapwrap">
+    <div id="map"><div class="mapmsg">Cargando mapa…</div></div>
+    <div class="addmode" id="addMode">Haz clic en el mapa donde está la cancha · <u id="addCancel">cancelar</u></div>
+    <div class="floating"><button class="fbtn" id="gpsBtn">◎ Usar mi ubicación</button></div>
+    <div class="legend">
+      <span><i style="background:#136b40"></i>Buscan jugadores</span>
+      <span><i style="background:#f08a24"></i>Completo / cerrado</span>
+      <span><i style="background:#9aa39c"></i>Sin partidos</span>
+    </div>
+  </div>
+  <aside>
+    <div class="tabs" id="tabs"></div>
+    <div class="scroll" id="panel"><div class="empty">Cargando…</div></div>
+    <div class="status" id="status"></div>
+  </aside>
+</div>
+
+<!-- Modal: login -->
+<div class="modal-bg" id="mLogin">
+  <div class="modal center">
+    <div class="big">⚽</div>
+    <h3>Entra para jugar</h3>
+    <p class="hint" style="font-size:13.5px">Inicia sesión con tu cuenta de Google para sumarte a partidos o publicar el tuyo. Solo usamos tu nombre y foto.</p>
+    <button class="gbtn" data-login>
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="mfoot" style="justify-content:center"><button type="button" class="btn ghost" data-close>Ahora no</button></div>
+  </div>
+</div>
+
+<!-- Modal: publicar partido -->
+<div class="modal-bg" id="mPartido">
+  <form class="modal" id="fPartido">
+    <h3>Publicar partido</h3>
+    <label>Cancha o loza</label><select id="fpCancha" required></select>
+    <label>Nombre del grupo</label><input id="fpEquipo" maxlength="40" placeholder="Ej: Los del barrio" required>
+    <div class="grid2">
+      <div><label>Fecha</label><input id="fpFecha" type="date" required></div>
+      <div><label>Hora</label><input id="fpHora" type="time" value="19:00" required></div>
+    </div>
+    <div class="grid2">
+      <div><label>¿Cuántos son?</label><input id="fpSomos" type="number" min="1" max="30" value="7" required></div>
+      <div><label>¿Cuántos necesitan?</label><input id="fpNec" type="number" min="1" max="30" value="3" required></div>
+    </div>
+    <div class="hint" id="fpTotal"></div>
+    <label>Nota (opcional)</label><textarea id="fpNota" maxlength="160" placeholder="Ej: S/ 10 c/u, traer polo oscuro."></textarea>
+    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn" id="fpSubmit">Publicar</button></div>
+  </form>
+</div>
+
+<!-- Modal: nueva cancha (admin) -->
+<div class="modal-bg" id="mCancha">
+  <form class="modal" id="fCancha">
+    <h3>Nueva cancha</h3>
+    <label>Nombre</label><input id="fcNombre" maxlength="50" required placeholder="Ej: Loza del Parque Grau">
+    <div class="grid2">
+      <div><label>Tipo</label><select id="fcTipo"><option>Loza</option><option>Sintética</option><option>Grass natural</option><option>Tierra</option></select></div>
+      <div><label>Precio</label><input id="fcPrecio" maxlength="30" value="Gratis"></div>
+    </div>
+    <label>Dirección / referencia</label><input id="fcDir" maxlength="80" placeholder="Ej: Jr. Los Pinos cuadra 2">
+    <div class="hint" id="fcCoords"></div>
+    <div class="mfoot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn violet">Agregar cancha</button></div>
+  </form>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
