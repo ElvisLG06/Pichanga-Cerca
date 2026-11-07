@@ -137,3 +137,21 @@ textarea{resize:vertical;min-height:56px}
 .qres button small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qres .none{padding:10px 12px;color:var(--muted);font-size:13px}
 @media (max-width:900px){ .search{left:54px;width:calc(100% - 66px)} .floating{top:62px} }
+
+/* ---------- PWA: áreas seguras (notch) e instalación ---------- */
+header{padding-top:calc(10px + env(safe-area-inset-top));padding-left:calc(16px + env(safe-area-inset-left));padding-right:calc(16px + env(safe-area-inset-right))}
+.scroll{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+.toast{bottom:calc(24px + env(safe-area-inset-bottom))}
+.inst-h{background:var(--lime);color:var(--pitch);border:0;border-radius:999px;padding:6px 12px;font-weight:700;font-size:12.5px;display:none}
+.inst-h.on{display:inline-block}
+.install{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:2500;background:#fff;border-radius:16px;
+  box-shadow:0 10px 40px rgba(0,0,0,.25);padding:12px;display:none;align-items:center;gap:12px;max-width:520px;margin:0 auto}
+.install.on{display:flex}
+.install img{border-radius:10px;flex:none}
+.install .itext{flex:1;font-size:13px;line-height:1.4}
+.install .itext b{display:block;font-size:14px}
+.install .iclose{border:0;background:none;font-size:16px;color:var(--muted);padding:4px 6px}
+.ios-share{display:inline-block;vertical-align:-3px}
+@media (display-mode: standalone){ .inst-h{display:none!important} }
+.inst-h{margin-left:auto}
+.inst-h.on + .account{margin-left:0}
