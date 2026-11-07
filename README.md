@@ -11,7 +11,6 @@ pichanga-cerca/
 │   └── config.js       ← ✏️ AQUÍ pegas tus claves
 ├── firestore.rules     ← reglas de seguridad (✏️ tu correo de admin)
 ├── firebase.json       ← configuración para Firebase Hosting
-├── .github/workflows/  ← publicación automática en GitHub Pages
 └── demo/               ← versiones demo sin Firebase
 ```
 
@@ -90,15 +89,22 @@ python -m http.server 5000 -d public
 2. Admin → **Canchas**: mueve el mapa a tu distrito y toca **🔎 Buscar canchas reales en la zona visible**. La app busca en OpenStreetMap las canchas de fútbol y lozas registradas; revisa los nombres, desmarca las que no quieras e **Importa**. También puedes agregar una a mano con un clic en el mapa.
 3. Abre otra ventana en **modo incógnito**, entra con otro Gmail y prueba a publicar o sumarte: los cambios se ven al instante en ambas ventanas.
 
-## 7. Publicarla en internet (GitHub Pages, automático)
+## 7. Publicarla en internet (GitHub Pages)
 
-El repositorio trae un workflow (`.github/workflows/pages.yml`) que publica la carpeta `public/` **cada vez que hay cambios en `main`**. Solo hay que activarlo una vez:
+La web publicada vive en la rama **`gh-pages`**, que contiene solo lo que hay en `public/`.
 
-1. En GitHub: **Settings → Pages → Build and deployment → Source: "GitHub Actions"**.
-2. En Firebase: **Authentication → Configuración → Dominios autorizados → Agregar dominio** → `elvislg06.github.io`.
-3. En GitHub, pestaña **Actions** → "Publicar en GitHub Pages" → **Run workflow** (solo la primera vez; después corre solo).
+**Configuración (una sola vez):**
+1. GitHub → **Settings → Pages → Source: "Deploy from a branch"** → Branch **`gh-pages`** / **`/ (root)`** → **Save**.
+2. Firebase → **Authentication → Configuración → Dominios autorizados** → agrega `elvislg06.github.io`.
 
-Tu web queda en **https://elvislg06.github.io/Pichanga-Cerca/** y se actualiza sola en 1–2 minutos después de cada cambio.
+Dirección: **https://elvislg06.github.io/Pichanga-Cerca/**
+
+**Para publicar cambios** hechos en `public/` (rama `main`):
+```bash
+git subtree split --prefix public -b gh-pages-tmp
+git push -f origin gh-pages-tmp:gh-pages
+git branch -D gh-pages-tmp
+```
 
 ### Alternativa: Firebase Hosting
 ```bash
