@@ -10,7 +10,8 @@ pichanga-cerca/
 │   ├── styles.css
 │   └── config.js       ← ✏️ AQUÍ pegas tus claves
 ├── firestore.rules     ← reglas de seguridad (✏️ tu correo de admin)
-├── firebase.json       ← configuración para publicar
+├── firebase.json       ← configuración para Firebase Hosting
+├── .github/workflows/  ← publicación automática en GitHub Pages
 └── demo/               ← versiones demo sin Firebase
 ```
 
@@ -86,23 +87,35 @@ python -m http.server 5000 -d public
 
 **Primera vez:**
 1. Entra con **elvislg06@gmail.com** → aparecerá la pestaña **🛡️ Admin**.
-2. Admin → **Canchas** → **Cargar 8 canchas de ejemplo**, o agrega canchas reales con **+ Agregar cancha** y clic en el mapa.
+2. Admin → **Canchas**: mueve el mapa a tu distrito y toca **🔎 Buscar canchas reales en la zona visible**. La app busca en OpenStreetMap las canchas de fútbol y lozas registradas; revisa los nombres, desmarca las que no quieras e **Importa**. También puedes agregar una a mano con un clic en el mapa.
 3. Abre otra ventana en **modo incógnito**, entra con otro Gmail y prueba a publicar o sumarte: los cambios se ven al instante en ambas ventanas.
 
-> La app pide tu ubicación al abrir. Si estás lejos de Miraflores, las canchas de ejemplo aparecerán en "Un poco más lejos". Lo ideal es agregar las canchas reales de tu zona desde el panel de admin.
+## 7. Publicarla en internet (GitHub Pages, automático)
 
-## 7. Publicarla en internet (para abrirla desde el celular)
+El repositorio trae un workflow (`.github/workflows/pages.yml`) que publica la carpeta `public/` **cada vez que hay cambios en `main`**. Solo hay que activarlo una vez:
 
-Necesitas Node.js (https://nodejs.org). En la carpeta del proyecto:
+1. En GitHub: **Settings → Pages → Build and deployment → Source: "GitHub Actions"**.
+2. En Firebase: **Authentication → Configuración → Dominios autorizados → Agregar dominio** → `elvislg06.github.io`.
+3. En GitHub, pestaña **Actions** → "Publicar en GitHub Pages" → **Run workflow** (solo la primera vez; después corre solo).
 
+Tu web queda en **https://elvislg06.github.io/Pichanga-Cerca/** y se actualiza sola en 1–2 minutos después de cada cambio.
+
+### Alternativa: Firebase Hosting
 ```bash
 npm install -g firebase-tools
 firebase login
-firebase use --add          # elige pichanga-cerca, alias: default
-firebase deploy             # sube la web y las reglas
+firebase use --add          # elige pichanga-cerca
+firebase deploy             # sube la web y las reglas → https://pichanga-cerca.web.app
 ```
 
-Te dará la dirección: **https://pichanga-cerca.web.app**. Cada vez que cambies algo, vuelve a ejecutar `firebase deploy`.
+## Consumo del plan gratuito (Spark)
+
+La app está optimizada para gastar pocas lecturas de Firestore:
+- **Caché local persistente:** al volver a abrir la app solo se descargan los cambios, no todo de nuevo.
+- **Solo datos vigentes:** se leen únicamente los partidos e inscripciones de las últimas 3 horas en adelante, no el historial.
+- Los visitantes sin cuenta no leen inscripciones ni usuarios.
+
+Puedes ver el consumo en Firebase → Firestore → **Uso**.
 
 ---
 
@@ -113,7 +126,7 @@ Te dará la dirección: **https://pichanga-cerca.web.app**. Cada vez que cambies
 | Ver mapa, canchas y partidos | ✅ | ✅ | ✅ |
 | Sumarse a un partido (con amigos) | — | ✅ | ✅ |
 | Publicar partidos, ver quién se sumó, quitar jugadores, ajustar cupos, cerrar o eliminar sus partidos | — | ✅ | ✅ |
-| Agregar o eliminar canchas | — | — | ✅ |
+| Agregar, importar (OpenStreetMap) o eliminar canchas | — | — | ✅ |
 | Eliminar cualquier partido, suspender usuarios | — | — | ✅ |
 
 Las **reglas de Firestore** imponen esto en el servidor: aunque alguien modifique el código en su navegador, no puede borrar partidos ajenos, inscribir a otra persona ni darse permisos de admin.

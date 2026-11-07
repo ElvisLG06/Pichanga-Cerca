@@ -2,13 +2,15 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut }
   from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, serverTimestamp }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const CFG = window.APP_CONFIG || {};
 const CENTRO = CFG.centro || { lat: -12.1219, lng: -77.0300 };
 const RADIO = CFG.radioKm || 3;
 const ADMINS = (CFG.adminEmails || []).map(e => e.toLowerCase().trim());
+// Nombres de las canchas ficticias de ejemplo (para poder borrarlas en bloque)
+const EJEMPLOS = ["Loza Parque Los Olivos", "Sintética El Golazo", "Loza Vecinal San Martín", "Complejo La Bombonera", "Loza Parque Central", "Sintética Tiki Taka", "Loza Colegio Santa Rosa", "Cancha El Potrero"];
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
@@ -61,7 +63,11 @@ if (location.protocol === "file:") {
 /* ---------- Firebase ---------- */
 const app = initializeApp(fb);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Caché local persistente: al volver a abrir la app solo se descargan los cambios,
+// lo que reduce mucho las lecturas facturables de Firestore.
+let db;
+try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+catch (e) { console.warn("Sin caché persistente:", e); db = getFirestore(app); }
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
@@ -72,6 +78,7 @@ const S = {
   cargado: { canchas: false, partidos: false },
   modo: "jugar", tab: null, sel: null, cant: {}, busy: false,
   addMode: false, newLatLng: null, ME: { ...CENTRO }, gps: false,
+  cand: null, candBusy: false, candMsg: "",
 };
 const unsub = { inscritos: null, usuarios: null, perfil: null };
 
@@ -98,7 +105,7 @@ onAuthStateChanged(auth, async u => {
     try { await setDoc(doc(db, "usuarios", u.uid), { nombre: u.displayName || "Jugador", foto: u.photoURL || "", ultimoAcceso: serverTimestamp() }, { merge: true }); }
     catch (e) { console.warn("perfil", e); }
     unsub.perfil = onSnapshot(doc(db, "usuarios", u.uid), s => { S.perfil = s.exists() ? s.data() : null; renderAll(); }, err);
-    unsub.inscritos = onSnapshot(collection(db, "inscritos"), s => { S.inscritos = s.docs.map(limpiarInscrito).filter(Boolean); renderAll(); }, err);
+    unsub.inscritos = onSnapshot(query(collection(db, "inscritos"), where("inicio", ">=", Date.now() - 3 * 3600 * 1000)), s => { S.inscritos = s.docs.map(limpiarInscrito).filter(Boolean); renderAll(); }, err);
     if (S.isAdmin) unsub.usuarios = onSnapshot(collection(db, "usuarios"), s => { S.usuarios = s.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); }, err);
     cerrar("mLogin");
   }
@@ -116,7 +123,8 @@ onSnapshot(query(collection(db, "partidos"), where("inicio", ">=", Date.now() - 
 
 function limpiarCancha(d) {
   const x = d.data(); if (!x || typeof x.lat !== "number" || typeof x.lng !== "number") return null;
-  return { id: d.id, nombre: String(x.nombre || "Cancha").slice(0, 50), tipo: String(x.tipo || "Loza"), precio: String(x.precio || ""), dir: String(x.dir || ""), lat: x.lat, lng: x.lng };
+  return { id: d.id, nombre: String(x.nombre || "Cancha").slice(0, 50), tipo: String(x.tipo || "Loza"), precio: String(x.precio || ""), dir: String(x.dir || ""), lat: x.lat, lng: x.lng,
+    fuente: x.fuente === "osm" ? "osm" : "", osmId: String(x.osmId || ""), ejemplo: x.ejemplo === true || EJEMPLOS.includes(String(x.nombre)) };
 }
 function limpiarPartido(d) {
   const x = d.data();
@@ -148,7 +156,7 @@ function estadoCancha(c) {
 /* =========================================================
    MAPA — Google Maps (con key) o OpenStreetMap (respaldo)
    ========================================================= */
-const MAP = { kind: null, obj: null, markers: {}, me: null, popup: null };
+const MAP = { kind: null, obj: null, markers: {}, me: null, popup: null, cand: [] };
 function pinSVG(color, n, sel) {
   const s = sel ? 1.2 : 1, w = 44 * s, h = 58 * s;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 44 58">
@@ -175,7 +183,7 @@ function cargarGoogle(key) {
     });
     MAP.popup = new google.maps.InfoWindow();
     MAP.obj.addListener("click", e => onMapClick(e.latLng.lat(), e.latLng.lng()));
-    dibujarMe(); dibujarMarkers(); renderStatus(); encuadrar();
+    dibujarMe(); dibujarMarkers(); dibujarCandidatos(); renderStatus(); encuadrar();
   };
   const s = document.createElement("script");
   s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__initGoogle&loading=async&v=weekly&language=es&region=PE`;
@@ -190,7 +198,7 @@ function cargarLeaflet() {
     MAP.obj = L.map("map").setView([S.ME.lat, S.ME.lng], 15);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(MAP.obj);
     MAP.obj.on("click", e => onMapClick(e.latlng.lat, e.latlng.lng));
-    dibujarMe(); dibujarMarkers(); renderStatus(); encuadrar();
+    dibujarMe(); dibujarMarkers(); dibujarCandidatos(); renderStatus(); encuadrar();
   };
   if (window.L) return go();
   const s = document.createElement("script"); s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s.onload = go; s.onerror = go; document.head.appendChild(s);
@@ -375,7 +383,7 @@ function detalleCancha() {
   return `<button class="back" data-a="volver">← Volver</button>
     <h2>${esc(c.nombre)}</h2>
     <div class="sub"><span class="tag">${esc(c.tipo)}</span><span>${esc(c.precio)}</span><span>·</span><span>${distKm(c).toFixed(1)} km de ti</span></div>
-    <div class="sub" style="margin-top:-4px">📍 ${esc(c.dir)} · <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">Cómo llegar</a></div>
+    <div class="sub" style="margin-top:-4px">📍 ${esc(c.dir)} · <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">Cómo llegar</a>${c.fuente === "osm" ? ` · <span class="mm">Datos: © OpenStreetMap</span>` : ""}</div>
     ${S.modo === "admin" ? `<div class="actions" style="margin:0 0 6px"><button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}">Eliminar cancha</button></div>` : ""}
     <div class="sec">Partidos por horario</div>
     ${ps.length ? ps.map(p => tarjeta(p, { conCancha: false })).join("") : `<div class="empty"><div class="big">⚽</div>No hay partidos publicados aquí.</div>`}
@@ -423,12 +431,17 @@ function vistaAdmin() {
     return `<h2>Todos los partidos</h2><div class="sub">${ps.length} vigentes.</div>${ps.map(p => tarjeta(p)).join("") || `<div class="empty">No hay partidos.</div>`}`;
   }
   if (S.tab === "canchas") {
+    const ejemplos = S.canchas.filter(c => c.ejemplo);
     return `<h2>Canchas y lozas</h2>
-      <div class="tip">Toca <b>Agregar cancha</b> y luego haz clic en su ubicación exacta en el mapa.</div>
-      <button class="btn violet block" style="margin-bottom:8px" data-a="addCancha">${S.addMode ? "Haz clic en el mapa…" : "+ Agregar cancha"}</button>
-      ${!S.canchas.length ? `<button class="btn ghost block" style="margin-bottom:8px" data-a="seed" ${S.busy ? "disabled" : ""}>Cargar 8 canchas de ejemplo (Miraflores)</button>` : ""}
-      ${S.canchas.map(c => { const e = estadoCancha(c); return `<div class="row"><div class="badge" style="background:${e.color}">${e.ps.length}</div>
-        <div style="flex:1;min-width:0;cursor:pointer" data-a="ver" data-c="${c.id}"><div style="font-weight:600">${esc(c.nombre)}</div><div class="mm">${esc(c.tipo)} · ${esc(c.precio)}</div></div>
+      ${vistaCandidatos()}
+      ${!S.cand ? `<div class="tip"><b>Canchas reales:</b> mueve el mapa a la zona que quieras (por ejemplo tu distrito) y toca <b>Buscar canchas reales</b>. Se buscan en OpenStreetMap las canchas de fútbol y lozas deportivas registradas; tú eliges cuáles importar.</div>
+      <button class="btn violet block" style="margin-bottom:8px" data-a="osmBuscar" ${S.candBusy ? "disabled" : ""}>${S.candBusy ? "Buscando…" : "🔎 Buscar canchas reales en la zona visible"}</button>
+      <button class="btn ghost block" style="margin-bottom:8px" data-a="addCancha">${S.addMode ? "Haz clic en el mapa…" : "+ Agregar una cancha a mano"}</button>` : ""}
+      ${ejemplos.length ? `<button class="btn danger block" style="margin-bottom:8px" data-a="borrarEjemplos" ${S.busy ? "disabled" : ""}>Eliminar las ${ejemplos.length} canchas de ejemplo (y sus partidos)</button>` : ""}
+      ${!S.canchas.length && !S.cand ? `<button class="btn ghost block" style="margin-bottom:8px" data-a="seed" ${S.busy ? "disabled" : ""}>Cargar 8 canchas de ejemplo (ficticias)</button>` : ""}
+      <div class="sec">Registradas (${S.canchas.length})</div>
+      ${S.canchas.slice().sort((a, b) => distKm(a) - distKm(b)).map(c => { const e = estadoCancha(c); return `<div class="row"><div class="badge" style="background:${e.color}">${e.ps.length}</div>
+        <div style="flex:1;min-width:0;cursor:pointer" data-a="ver" data-c="${c.id}"><div style="font-weight:600">${esc(c.nombre)}${c.ejemplo ? ' <span class="tag" style="background:#fdeccf;color:#a85a12">ejemplo</span>' : ""}</div><div class="mm">${esc(c.tipo)} · ${distKm(c).toFixed(1)} km${c.fuente === "osm" ? " · OpenStreetMap" : ""}</div></div>
         <button class="btn danger sm" data-a="borrarCancha" data-c="${c.id}" ${S.busy ? "disabled" : ""}>Eliminar</button></div>`; }).join("")}`;
   }
   if (S.tab === "usuarios") {
@@ -489,7 +502,7 @@ $("#panel").addEventListener("click", e => {
       const cant = Math.min(Math.max(1, S.cant[p.id] || (mia ? mia.cantidad : 1)), maxC);
       if (cant < 1) return toast("Ya no quedan cupos.");
       const u = S.user;
-      return conBusy(() => setDoc(doc(db, "inscritos", `${p.id}_${u.uid}`), { pid: p.id, uid: u.uid, nombre: u.displayName || "Jugador", foto: u.photoURL || "", cantidad: cant, en: serverTimestamp() })
+      return conBusy(() => setDoc(doc(db, "inscritos", `${p.id}_${u.uid}`), { pid: p.id, uid: u.uid, nombre: u.displayName || "Jugador", foto: u.photoURL || "", cantidad: cant, inicio: p.inicio, en: serverTimestamp() })
         .then(() => { delete S.cant[p.id]; }), () => `¡Listo! ${cant > 1 ? `Te sumaste con ${cant - 1} más` : "Te sumaste"}. Faltan ${faltan(p)}.`);
     }
     case "salir": return conBusy(() => deleteDoc(doc(db, "inscritos", `${p.id}_${S.user.uid}`)).then(() => { delete S.cant[p.id]; }), "Saliste del partido. Se liberaron los cupos.");
@@ -521,8 +534,134 @@ $("#panel").addEventListener("click", e => {
     case "bloquear": { const u = S.usuarios.find(x => x.id === b.dataset.u); if (!u) return;
       return conBusy(() => updateDoc(doc(db, "usuarios", u.id), { bloqueado: !u.bloqueado }), u.bloqueado ? `${u.nombre} fue reactivado.` : `${u.nombre} fue suspendido.`); }
     case "seed": return conBusy(sembrarCanchas, "Se cargaron 8 canchas de ejemplo.");
+    case "osmBuscar": return buscarOSM();
+    case "osmCancelar": S.cand = null; dibujarCandidatos(); return renderPanel();
+    case "osmTodos": { const on = !S.cand.every(c => c.sel); S.cand.forEach(c => c.sel = on); return renderPanel(); }
+    case "osmImportar": return importarCandidatos();
+    case "osmVer": { const c = S.cand.find(x => x.osmId === b.dataset.o); if (c) { panTo(c); if (MAP.kind === "osm") MAP.obj.setZoom(Math.max(MAP.obj.getZoom(), 17)); else MAP.obj.setZoom(Math.max(MAP.obj.getZoom(), 17)); } return; }
+    case "borrarEjemplos": {
+      const ej = S.canchas.filter(c => c.ejemplo);
+      if (!confirmar("ejemplos", `Toca otra vez para eliminar ${ej.length} canchas de ejemplo y sus partidos.`)) return;
+      return conBusy(async () => {
+        const ops = [];
+        ej.forEach(c => {
+          S.partidos.filter(x => x.canchaId === c.id).forEach(x => { inscritosDe(x.id).forEach(i => ops.push(doc(db, "inscritos", i.id))); ops.push(doc(db, "partidos", x.id)); });
+          ops.push(doc(db, "canchas", c.id));
+        });
+        for (let i = 0; i < ops.length; i += 400) { const bt = writeBatch(db); ops.slice(i, i + 400).forEach(r => bt.delete(r)); await bt.commit(); }
+        S.sel = null;
+      }, "Canchas de ejemplo eliminadas.");
+    }
   }
 });
+$("#panel").addEventListener("input", e => {
+  const t = e.target, o = t.dataset && t.dataset.o; if (!o || !S.cand) return;
+  const c = S.cand.find(x => x.osmId === o); if (!c) return;
+  if (t.type === "checkbox") { c.sel = t.checked; const n = S.cand.filter(x => x.sel).length; const b = $("[data-a=osmImportar]"); if (b) { b.textContent = `Importar ${n} cancha${n === 1 ? "" : "s"}`; b.disabled = !n; } }
+  else if (t.dataset.f === "nombre") c.nombre = t.value.slice(0, 50);
+  else if (t.dataset.f === "tipo") c.tipo = t.value;
+});
+
+/* =========================================================
+   CANCHAS REALES DESDE OPENSTREETMAP (solo admin)
+   ========================================================= */
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+function zonaVisible() {
+  if (!MAP.obj) return null;
+  let s, w, n, e;
+  if (MAP.kind === "google") { const b = MAP.obj.getBounds(); if (!b) return null; s = b.getSouthWest().lat(); w = b.getSouthWest().lng(); n = b.getNorthEast().lat(); e = b.getNorthEast().lng(); }
+  else { const b = MAP.obj.getBounds(); s = b.getSouth(); w = b.getWest(); n = b.getNorth(); e = b.getEast(); }
+  // limita la búsqueda a ~6 km x 6 km alrededor del centro para no saturar el servicio
+  const cLat = (s + n) / 2, cLng = (w + e) / 2, dLat = Math.min((n - s) / 2, 0.028), dLng = Math.min((e - w) / 2, 0.028);
+  return { s: cLat - dLat, w: cLng - dLng, n: cLat + dLat, e: cLng + dLng, recortada: (n - s) / 2 > 0.028 || (e - w) / 2 > 0.028 };
+}
+function tipoDeSuperficie(t) {
+  const x = String(t || "").toLowerCase();
+  if (/artificial|turf|synthetic/.test(x)) return "Sintética";
+  if (/grass/.test(x)) return "Grass natural";
+  if (/dirt|ground|sand|earth|gravel|unpaved/.test(x)) return "Tierra";
+  return "Loza";
+}
+async function buscarOSM() {
+  const z = zonaVisible(); if (!z) return toast("El mapa aún no carga.");
+  S.candBusy = true; renderPanel();
+  const bbox = `${z.s.toFixed(5)},${z.w.toFixed(5)},${z.n.toFixed(5)},${z.e.toFixed(5)}`;
+  const q = `[out:json][timeout:25];(nwr["leisure"="pitch"]["sport"~"soccer|futsal|football|multi"](${bbox}););out center tags;`;
+  let data = null;
+  for (const url of OVERPASS) {
+    try {
+      const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+      if (r.ok) { data = await r.json(); break; }
+    } catch (e) { console.warn("Overpass", url, e); }
+  }
+  S.candBusy = false;
+  if (!data) { renderPanel(); return toast("OpenStreetMap no respondió. Intenta en unos segundos."); }
+  const existentes = S.canchas;
+  const vistos = new Set();
+  let n = 0;
+  S.cand = (data.elements || []).map(el => {
+    const lat = el.lat ?? (el.center && el.center.lat), lng = el.lon ?? (el.center && el.center.lon);
+    if (typeof lat !== "number" || typeof lng !== "number") return null;
+    const t = el.tags || {}, osmId = `${el.type}/${el.id}`;
+    const sport = String(t.sport || "");
+    const base = /multi/.test(sport) && !/soccer|futsal/.test(sport) ? "Loza multideportiva" : /futsal/.test(sport) ? "Loza de fulbito" : "Cancha de fútbol";
+    const calle = t["addr:street"] ? `${t["addr:street"]}${t["addr:housenumber"] ? " " + t["addr:housenumber"] : ""}` : "";
+    n++;
+    return { osmId, lat, lng, nombre: String(t.name || (calle ? `${base} · ${calle}` : `${base} #${n}`)).slice(0, 50),
+      tipo: tipoDeSuperficie(t.surface), dir: calle.slice(0, 80), precio: t.fee === "yes" ? "Pagado" : t.fee === "no" ? "Gratis" : "", sel: true };
+  }).filter(c => {
+    if (!c || vistos.has(c.osmId)) return false; vistos.add(c.osmId);
+    // descarta las que ya están registradas (mismo id de OSM o a menos de 40 m)
+    return !existentes.some(x => x.osmId === c.osmId || km(x, c) < 0.04);
+  }).sort((a, b) => distKm(a) - distKm(b)).slice(0, 150);
+  S.candMsg = z.recortada ? "Se buscó en un área de ~6 km alrededor del centro del mapa. Acerca el mapa a otra zona para buscar ahí." : "";
+  dibujarCandidatos(); renderPanel();
+  toast(S.cand.length ? `Se encontraron ${S.cand.length} canchas nuevas en esta zona.` : "No se encontraron canchas nuevas en esta zona.");
+}
+function vistaCandidatos() {
+  if (!S.cand) return "";
+  const n = S.cand.filter(c => c.sel).length;
+  const tipos = ["Loza", "Sintética", "Grass natural", "Tierra"];
+  return `<div class="tip" style="background:#f3f0fd"><b>${S.cand.length} canchas encontradas</b> en OpenStreetMap (puntos morados en el mapa). Revisa los nombres y desmarca las que no quieras.${S.candMsg ? `<br><span style="opacity:.8">${esc(S.candMsg)}</span>` : ""}</div>
+    ${S.cand.length ? `<div class="actions" style="margin:0 0 8px">
+      <button class="btn violet" data-a="osmImportar" ${!n || S.busy ? "disabled" : ""}>Importar ${n} cancha${n === 1 ? "" : "s"}</button>
+      <button class="btn ghost sm" data-a="osmTodos">Marcar / desmarcar todas</button>
+      <button class="btn ghost sm" data-a="osmCancelar">Cancelar</button></div>
+    ${S.cand.map(c => `<div class="row" style="align-items:flex-start">
+      <input type="checkbox" data-o="${esc(c.osmId)}" ${c.sel ? "checked" : ""} style="width:18px;height:18px;margin-top:8px;flex:none">
+      <div style="flex:1;min-width:0">
+        <input data-o="${esc(c.osmId)}" data-f="nombre" value="${esc(c.nombre)}" maxlength="50" style="padding:6px 8px;font-weight:600">
+        <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+          <select data-o="${esc(c.osmId)}" data-f="tipo" style="padding:4px 6px;width:auto;font-size:12px">${tipos.map(t => `<option${t === c.tipo ? " selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="mm" style="margin:0">${distKm(c).toFixed(1)} km${c.dir ? " · " + esc(c.dir) : ""}</span>
+          <a href="#" data-a="osmVer" data-o="${esc(c.osmId)}" class="mm" style="margin:0 0 0 auto">ver</a>
+        </div>
+      </div></div>`).join("")}
+    <div class="mm" style="margin:6px 0 12px">Datos © colaboradores de OpenStreetMap (ODbL).</div>`
+    : `<button class="btn ghost block" style="margin-bottom:8px" data-a="osmCancelar">Volver</button>`}`;
+}
+function dibujarCandidatos() {
+  MAP.cand.forEach(quitar); MAP.cand = [];
+  if (!MAP.obj || !S.cand) return;
+  S.cand.forEach(c => {
+    if (MAP.kind === "google") MAP.cand.push(new google.maps.Marker({ map: MAP.obj, position: { lat: c.lat, lng: c.lng }, title: c.nombre, zIndex: 5,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: "#6d3fd8", fillOpacity: .9, strokeColor: "#fff", strokeWeight: 2 } }));
+    else MAP.cand.push(L.circleMarker([c.lat, c.lng], { radius: 7, color: "#fff", weight: 2, fillColor: "#6d3fd8", fillOpacity: .9 }).bindTooltip(c.nombre).addTo(MAP.obj));
+  });
+}
+function importarCandidatos() {
+  const sel = S.cand.filter(c => c.sel && c.nombre.trim()); if (!sel.length) return;
+  conBusy(async () => {
+    for (let i = 0; i < sel.length; i += 400) {
+      const bt = writeBatch(db);
+      sel.slice(i, i + 400).forEach(c => bt.set(doc(collection(db, "canchas")), { nombre: c.nombre.trim().slice(0, 50), tipo: c.tipo, precio: c.precio || "—", dir: c.dir,
+        lat: c.lat, lng: c.lng, fuente: "osm", osmId: c.osmId, creadoEn: serverTimestamp() }));
+      await bt.commit();
+    }
+    S.cand = null; dibujarCandidatos();
+  }, `Se importaron ${sel.length} canchas reales.`);
+}
+
 async function sembrarCanchas() {
   const o = (a, b) => ({ lat: CENTRO.lat + a, lng: CENTRO.lng + b });
   const xs = [
@@ -536,7 +675,7 @@ async function sembrarCanchas() {
     ["Cancha El Potrero", "Tierra", "Gratis", "Psje. El Potrero", o(-0.0110, -0.0030)],
   ];
   const batch = writeBatch(db);
-  xs.forEach(([nombre, tipo, precio, dir, ll]) => batch.set(doc(collection(db, "canchas")), { nombre, tipo, precio, dir, ...ll, creadoEn: serverTimestamp() }));
+  xs.forEach(([nombre, tipo, precio, dir, ll]) => batch.set(doc(collection(db, "canchas")), { nombre, tipo, precio, dir, ...ll, ejemplo: true, creadoEn: serverTimestamp() }));
   await batch.commit();
 }
 
