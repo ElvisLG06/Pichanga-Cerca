@@ -114,6 +114,15 @@ firebase use --add          # elige pichanga-cerca
 firebase deploy             # sube la web y las reglas → https://pichanga-cerca.web.app
 ```
 
+## Instalar como app (PWA)
+
+La web se puede instalar en el celular, con su propio ícono y en pantalla completa:
+- **Android (Chrome):** aparece el aviso o el botón **"📲 Instalar app"**. También desde el menú **⋮ → Instalar app**.
+- **iPhone (Safari):** **Compartir → "Agregar a inicio"**. La app muestra estas instrucciones la primera vez.
+
+Archivos: `public/manifest.webmanifest`, `public/sw.js` (service worker, red primero), `public/pwa.js` y `public/icons/`.
+Si cambias archivos y no ves la versión nueva en la app instalada, ciérrala y vuelve a abrirla.
+
 ## Consumo del plan gratuito (Spark)
 
 La app está optimizada para gastar pocas lecturas de Firestore:
