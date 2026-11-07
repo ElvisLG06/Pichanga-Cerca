@@ -7,12 +7,12 @@
 window.APP_CONFIG = {
   // Firebase → Configuración del proyecto → Tus apps → App web → firebaseConfig
   firebase: {
-    apiKey: "PEGA_AQUI_TU_API_KEY",
-    authDomain: "PEGA_AQUI.firebaseapp.com",
-    projectId: "PEGA_AQUI",
-    storageBucket: "PEGA_AQUI.appspot.com",
-    messagingSenderId: "PEGA_AQUI",
-    appId: "PEGA_AQUI",
+    apiKey: "AIzaSyA58Xx4Rfdg7OOBM9QIKaay1Y2_7IVilg4",
+    authDomain: "pichanga-cerca.firebaseapp.com",
+    projectId: "pichanga-cerca",
+    storageBucket: "pichanga-cerca.firebasestorage.app",
+    messagingSenderId: "21327229248",
+    appId: "1:21327229248:web:878ce640edbda673b7caa5",
   },
 
   // Google Cloud → APIs y servicios → Credenciales → Clave de API
